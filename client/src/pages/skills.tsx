@@ -18,7 +18,6 @@ import {
   CheckCircle2,
   XCircle,
   Lightbulb,
-  Lock,
   Star,
   Sparkles,
   Loader2,
@@ -36,6 +35,7 @@ import {
   MessageSquareQuote,
 } from "lucide-react";
 import type { SkillCard, UserSkillProgress } from "@shared/schema";
+import { UpgradeBanner, FeatureLockedInline } from "@/components/upgrade-banner";
 
 function SkillCardDetail({
   card,
@@ -43,12 +43,14 @@ function SkillCardDetail({
   isCompleted,
   allCards,
   onSelectCard,
+  userPlan,
 }: {
   card: SkillCard;
   onBack: () => void;
   isCompleted: boolean;
   allCards: SkillCard[];
   onSelectCard: (card: SkillCard) => void;
+  userPlan: string;
 }) {
   const { toast } = useToast();
   const [completed, setCompleted] = useState(isCompleted);
@@ -338,7 +340,7 @@ function SkillCardDetail({
               <Sparkles className="w-4 h-4 text-primary" />
               <h3 className="font-semibold text-sm">実習チャット</h3>
             </div>
-            {(practiceState === 'idle' || practiceState === 'done') && (
+            {(practiceState === 'idle' || practiceState === 'done') && userPlan !== 'free' && (
               <Button
                 size="sm"
                 variant="outline"
@@ -356,7 +358,11 @@ function SkillCardDetail({
             )}
           </div>
 
-          {practiceState === 'idle' && !startPracticeMutation.isPending && (
+          {practiceState === 'idle' && !startPracticeMutation.isPending && userPlan === 'free' && (
+            <UpgradeBanner feature="AI実習チャット" requiredPlan="Basic" />
+          )}
+
+          {practiceState === 'idle' && !startPracticeMutation.isPending && userPlan !== 'free' && (
             <p className="text-xs text-muted-foreground">
               AIがお客様役となり、実際の商談をシミュレーションします。会話形式で練習し、終了後にAIコーチが評価します。
             </p>
@@ -563,6 +569,7 @@ export default function SkillsPage() {
         isCompleted={completedIds.has(selectedCard.id)}
         allCards={skillCards || []}
         onSelectCard={setSelectedCard}
+        userPlan={userPlan}
       />
     );
   }
@@ -647,22 +654,19 @@ export default function SkillsPage() {
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">{filteredCards.length}件のカード</p>
             {filteredCards.map((card, index) => {
-              const isLocked = card.isPremium && userPlan === "free" && index >= 3;
               const isDone = completedIds.has(card.id);
               return (
                 <Card
                   key={card.id}
-                  className={`p-4 hover-elevate ${isLocked ? "opacity-60" : "cursor-pointer"}`}
-                  onClick={() => !isLocked && setSelectedCard(card)}
+                  className="p-4 hover-elevate cursor-pointer"
+                  onClick={() => setSelectedCard(card)}
                   data-testid={`card-skill-${card.id}`}
                 >
                   <div className="flex items-start gap-3">
                     <div className={`w-10 h-10 rounded-md flex items-center justify-center flex-shrink-0 ${
                       isDone ? "bg-emerald-500/10" : "bg-primary/10"
                     }`}>
-                      {isLocked ? (
-                        <Lock className="w-4 h-4 text-muted-foreground" />
-                      ) : isDone ? (
+                      {isDone ? (
                         <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                       ) : card.isAiGenerated ? (
                         <Sparkles className="w-4 h-4 text-primary" />

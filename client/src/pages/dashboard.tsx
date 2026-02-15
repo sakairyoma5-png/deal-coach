@@ -24,6 +24,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import type { SkillDiagnosis, UserProgress, Subscription, SkillCard } from "@shared/schema";
+import { UpgradeOverlay } from "@/components/upgrade-banner";
 
 export default function Dashboard() {
   const { user, isLoading: authLoading, logout } = useAuth();
@@ -60,7 +61,8 @@ export default function Dashboard() {
     { icon: Target, label: "料金プラン", path: "/pricing", color: "text-amber-500", bg: "bg-amber-500/10" },
   ];
 
-  const planLabel = subscription?.plan === "pro" ? "Pro" : subscription?.plan === "basic" ? "Basic" : "Free";
+  const userPlan = subscription?.plan || "free";
+  const planLabel = userPlan === "pro" ? "Pro" : userPlan === "basic" ? "Basic" : "Free";
 
   if (authLoading) {
     return (
@@ -166,7 +168,24 @@ export default function Dashboard() {
             <Sparkles className="w-4 h-4 text-primary" />
             おすすめスキルカード
           </h2>
-          {recsLoading ? (
+          {userPlan === "free" ? (
+            <UpgradeOverlay feature="AIレコメンド" requiredPlan="Basic">
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-2.5 p-2.5 rounded-md bg-muted/30">
+                    <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                      <BookOpen className="w-3.5 h-3.5 text-primary" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium">あなたにおすすめのスキル</p>
+                      <p className="text-[10px] text-muted-foreground">AIが診断結果から提案</p>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                  </div>
+                ))}
+              </div>
+            </UpgradeOverlay>
+          ) : recsLoading ? (
             <div className="space-y-2">
               {[1, 2].map((i) => (
                 <Skeleton key={i} className="h-16 w-full" />
