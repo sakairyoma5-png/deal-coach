@@ -1,12 +1,13 @@
 import { useAuth } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { BottomNav } from "@/components/bottom-nav";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import {
   Zap,
@@ -19,11 +20,14 @@ import {
   Target,
   Calendar as CalendarIcon,
   CheckCircle2,
+  Sparkles,
+  ChevronRight,
 } from "lucide-react";
-import type { SkillDiagnosis, UserProgress, Subscription } from "@shared/schema";
+import type { SkillDiagnosis, UserProgress, Subscription, SkillCard } from "@shared/schema";
 
 export default function Dashboard() {
   const { user, isLoading: authLoading, logout } = useAuth();
+  const [, navigate] = useLocation();
 
   const { data: latestDiagnosis, isLoading: diagLoading } = useQuery<SkillDiagnosis | null>({
     queryKey: ["/api/diagnosis/latest"],
@@ -35,6 +39,11 @@ export default function Dashboard() {
 
   const { data: subscription } = useQuery<Subscription | null>({
     queryKey: ["/api/subscription"],
+  });
+
+  const { data: recommendations, isLoading: recsLoading } = useQuery<{ cards: SkillCard[]; reason: string }>({
+    queryKey: ["/api/recommendations"],
+    enabled: !!latestDiagnosis,
   });
 
   const skillAxes = [
@@ -154,24 +163,51 @@ export default function Dashboard() {
 
         <Card className="p-4" data-testid="card-recommendations">
           <h2 className="font-semibold text-sm mb-3 flex items-center gap-2">
-            <Zap className="w-4 h-4 text-primary" />
-            AIからの提案
+            <Sparkles className="w-4 h-4 text-primary" />
+            おすすめスキルカード
           </h2>
-          <div className="space-y-2">
+          {recsLoading ? (
+            <div className="space-y-2">
+              {[1, 2].map((i) => (
+                <Skeleton key={i} className="h-16 w-full" />
+              ))}
+            </div>
+          ) : recommendations && recommendations.cards.length > 0 ? (
+            <div className="space-y-2">
+              {recommendations.reason && (
+                <p className="text-xs text-muted-foreground mb-2">{recommendations.reason}</p>
+              )}
+              {recommendations.cards.slice(0, 3).map((card) => (
+                <div
+                  key={card.id}
+                  className="flex items-center gap-2.5 p-2.5 rounded-md bg-muted/30 hover-elevate cursor-pointer"
+                  onClick={() => navigate("/skills")}
+                  data-testid={`rec-card-${card.id}`}
+                >
+                  <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    {card.isAiGenerated ? (
+                      <Sparkles className="w-3.5 h-3.5 text-primary" />
+                    ) : (
+                      <BookOpen className="w-3.5 h-3.5 text-primary" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{card.titleJa}</p>
+                    <p className="text-[10px] text-muted-foreground">{card.category}</p>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                </div>
+              ))}
+            </div>
+          ) : (
             <div className="p-3 rounded-md bg-muted/50 text-sm">
               <p className="text-muted-foreground leading-relaxed">
-                {latestDiagnosis ? (
-                  latestDiagnosis.overallScore < 50
-                    ? "基本的なSPIN営業のスキルカードから学習を始めましょう。質問力を高めることで商談の質が大きく向上します。"
-                    : latestDiagnosis.overallScore < 75
-                    ? "良い進歩です！クロージング力をさらに伸ばすために、AIロープレで実践練習をしましょう。"
-                    : "素晴らしいスコアです！カスタムシナリオで実際の商談に近い練習をして、さらにスキルを磨きましょう。"
-                ) : (
-                  "まずはスキル診断を受けて、あなたの営業力を可視化しましょう。AIが最適な学習プランを提案します。"
-                )}
+                {latestDiagnosis
+                  ? "AIロープレを練習して、あなたに合ったスキルカードを自動生成しましょう。"
+                  : "まずはAIロープレを試して、あなたの営業力を可視化しましょう。AIが最適な学習プランを提案します。"}
               </p>
             </div>
-          </div>
+          )}
         </Card>
 
         <Card className="p-4" data-testid="card-recent-activity">

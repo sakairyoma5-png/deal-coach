@@ -35,6 +35,9 @@ export const skillCards = pgTable("skill_cards", {
   difficulty: text("difficulty").notNull().default("beginner"),
   iconName: text("icon_name").notNull().default("BookOpen"),
   isPremium: boolean("is_premium").notNull().default(false),
+  isAiGenerated: boolean("is_ai_generated").notNull().default(false),
+  sourceSessionId: integer("source_session_id"),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const roleplayScenarios = pgTable("roleplay_scenarios", {
@@ -61,6 +64,7 @@ export const roleplaySessions = pgTable("roleplay_sessions", {
   config: jsonb("config"),
   messages: jsonb("messages").notNull().default([]),
   feedback: jsonb("feedback"),
+  feedbackChatMessages: jsonb("feedback_chat_messages"),
   score: integer("score"),
   completedAt: timestamp("completed_at"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -91,12 +95,20 @@ export const userProgress = pgTable("user_progress", {
   activityType: text("activity_type").notNull(),
 });
 
+export const userSkillProgress = pgTable("user_skill_progress", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  skillCardId: integer("skill_card_id").notNull(),
+  completedAt: timestamp("completed_at").defaultNow(),
+});
+
 export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({ id: true, createdAt: true, updatedAt: true });
-export const insertSkillCardSchema = createInsertSchema(skillCards).omit({ id: true });
+export const insertSkillCardSchema = createInsertSchema(skillCards).omit({ id: true, createdAt: true });
 export const insertRoleplayScenarioSchema = createInsertSchema(roleplayScenarios).omit({ id: true, createdAt: true });
 export const insertRoleplaySessionSchema = createInsertSchema(roleplaySessions).omit({ id: true, createdAt: true });
 export const insertSkillDiagnosisSchema = createInsertSchema(skillDiagnoses).omit({ id: true, createdAt: true });
 export const insertUserProgressSchema = createInsertSchema(userProgress).omit({ id: true });
+export const insertUserSkillProgressSchema = createInsertSchema(userSkillProgress).omit({ id: true, completedAt: true });
 
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
@@ -110,3 +122,5 @@ export type SkillDiagnosis = typeof skillDiagnoses.$inferSelect;
 export type InsertSkillDiagnosis = z.infer<typeof insertSkillDiagnosisSchema>;
 export type UserProgress = typeof userProgress.$inferSelect;
 export type InsertUserProgress = z.infer<typeof insertUserProgressSchema>;
+export type UserSkillProgress = typeof userSkillProgress.$inferSelect;
+export type InsertUserSkillProgress = z.infer<typeof insertUserSkillProgressSchema>;

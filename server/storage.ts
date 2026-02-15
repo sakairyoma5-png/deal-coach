@@ -1,14 +1,15 @@
 import {
-  subscriptions, skillCards, roleplayScenarios, roleplaySessions, skillDiagnoses, userProgress,
+  subscriptions, skillCards, roleplayScenarios, roleplaySessions, skillDiagnoses, userProgress, userSkillProgress,
   type Subscription, type InsertSubscription,
   type SkillCard, type InsertSkillCard,
   type RoleplayScenario, type InsertRoleplayScenario,
   type RoleplaySession, type InsertRoleplaySession,
   type SkillDiagnosis, type InsertSkillDiagnosis,
   type UserProgress, type InsertUserProgress,
+  type UserSkillProgress, type InsertUserSkillProgress,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, sql } from "drizzle-orm";
+import { eq, desc, and, sql, inArray } from "drizzle-orm";
 
 export interface IStorage {
   getSubscription(userId: string): Promise<Subscription | undefined>;
@@ -31,6 +32,13 @@ export interface IStorage {
 
   getRecentProgress(userId: string, limit?: number): Promise<UserProgress[]>;
   createProgress(data: InsertUserProgress): Promise<UserProgress>;
+
+  getSkillCardByTitleJa(titleJa: string): Promise<SkillCard | undefined>;
+  getSkillCardsByIds(ids: number[]): Promise<SkillCard[]>;
+
+  getUserSkillProgress(userId: string): Promise<UserSkillProgress[]>;
+  markSkillCompleted(userId: string, skillCardId: number): Promise<UserSkillProgress>;
+  isSkillCompleted(userId: string, skillCardId: number): Promise<boolean>;
 
   getSkillCardCount(): Promise<number>;
   getScenarioCount(): Promise<number>;
@@ -128,6 +136,34 @@ export class DatabaseStorage implements IStorage {
   async createProgress(data: InsertUserProgress): Promise<UserProgress> {
     const [p] = await db.insert(userProgress).values(data).returning();
     return p;
+  }
+
+  async getSkillCardByTitleJa(titleJa: string): Promise<SkillCard | undefined> {
+    const [card] = await db.select().from(skillCards).where(eq(skillCards.titleJa, titleJa));
+    return card;
+  }
+
+  async getSkillCardsByIds(ids: number[]): Promise<SkillCard[]> {
+    if (ids.length === 0) return [];
+    return db.select().from(skillCards).where(inArray(skillCards.id, ids));
+  }
+
+  async getUserSkillProgress(userId: string): Promise<UserSkillProgress[]> {
+    return db.select().from(userSkillProgress).where(eq(userSkillProgress.userId, userId));
+  }
+
+  async markSkillCompleted(userId: string, skillCardId: number): Promise<UserSkillProgress> {
+    const existing = await db.select().from(userSkillProgress)
+      .where(and(eq(userSkillProgress.userId, userId), eq(userSkillProgress.skillCardId, skillCardId)));
+    if (existing.length > 0) return existing[0];
+    const [p] = await db.insert(userSkillProgress).values({ userId, skillCardId }).returning();
+    return p;
+  }
+
+  async isSkillCompleted(userId: string, skillCardId: number): Promise<boolean> {
+    const [p] = await db.select().from(userSkillProgress)
+      .where(and(eq(userSkillProgress.userId, userId), eq(userSkillProgress.skillCardId, skillCardId)));
+    return !!p;
   }
 
   async getSkillCardCount(): Promise<number> {
