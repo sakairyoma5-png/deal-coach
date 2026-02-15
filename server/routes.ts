@@ -286,6 +286,16 @@ ${customDifficultyInstructions[customDifficulty] || customDifficultyInstructions
       if (!session) return res.status(404).json({ message: "Session not found" });
       if (session.userId !== userId) return res.status(403).json({ message: "Forbidden" });
 
+      const recentStudyLogs = await storage.getRecentStudyLogs(userId, 14);
+      let recentStudyContext = "";
+      if (recentStudyLogs.length > 0) {
+        const studiedCardIds = Array.from(new Set(recentStudyLogs.map(l => l.skillCardId)));
+        const studiedCards = await storage.getSkillCardsByIds(studiedCardIds);
+        if (studiedCards.length > 0) {
+          recentStudyContext = `\n\n直近2週間でこのユーザーが学習したスキルカード:\n${studiedCards.map(c => `- ${c.titleJa}（${c.category}）: ${c.descriptionJa?.slice(0, 60) || ""}`).join("\n")}\n\n上記の学習内容を踏まえて、学んだスキルが実践できているかどうかも評価に含めてください。`;
+        }
+      }
+
       const msgs = session.messages as any[];
       const conversationText = msgs
         .filter((m: any) => m.role !== "system")
@@ -296,6 +306,7 @@ ${customDifficultyInstructions[customDifficulty] || customDifficultyInstructions
 
 会話内容:
 ${conversationText}
+${recentStudyContext}
 
 以下のJSON形式で回答してください（JSON以外は出力しないでください）:
 {
@@ -403,6 +414,16 @@ ${conversationText}
         .map((m: any) => `${m.role === "user" ? "営業担当" : "顧客"}: ${m.content}`)
         .join("\n");
 
+      const recentLogs = await storage.getRecentStudyLogs(userId, 14);
+      let studyContext = "";
+      if (recentLogs.length > 0) {
+        const cardIds = Array.from(new Set(recentLogs.map(l => l.skillCardId)));
+        const studiedCards = await storage.getSkillCardsByIds(cardIds);
+        if (studiedCards.length > 0) {
+          studyContext = `\n\nこのユーザーが直近2週間で学習したスキルカード:\n${studiedCards.map(c => `- ${c.titleJa}（${c.category}）`).join("\n")}\n上記のスキルの活用度についてもフィードバックに含めてください。`;
+        }
+      }
+
       const systemPrompt = `あなたは営業トレーニングのAIコーチです。以下のロープレの会話と評価結果を踏まえ、ユーザーと対話形式でフィードバックを行ってください。
 
 会話内容:
@@ -416,6 +437,7 @@ ${conversationText}
 - 総合スコア: ${feedback.overallScore}/100
 - 強み: ${(feedback.strengths || []).join("、")}
 - 改善点: ${(feedback.weaknesses || []).join("、")}
+${studyContext}
 
 ルール:
 - 日本語で会話してください
@@ -590,6 +612,52 @@ ${conversationText}
       } else {
         res.status(500).json({ message: "Failed to process feedback message" });
       }
+    }
+  });
+
+  app.get("/api/study-logs/today", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const logs = await storage.getTodayStudyLogs(userId);
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch today's study logs" });
+    }
+  });
+
+  app.get("/api/study-logs/recent", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const days = parseInt(req.query.days as string) || 30;
+      const logs = await storage.getRecentStudyLogs(userId, days);
+      res.json(logs);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch recent study logs" });
+    }
+  });
+
+  app.post("/api/study-logs", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { skillCardId } = req.body;
+      if (!skillCardId) return res.status(400).json({ message: "skillCardId is required" });
+
+      const alreadyStudied = await storage.hasStudiedToday(userId, skillCardId);
+      if (alreadyStudied) {
+        return res.json({ alreadyStudied: true, message: "Already studied today" });
+      }
+
+      const log = await storage.createStudyLog(userId, skillCardId);
+
+      await storage.createProgress({
+        userId,
+        skillCardId,
+        activityType: "skill_study",
+      });
+
+      res.json({ alreadyStudied: false, log });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to create study log" });
     }
   });
 
