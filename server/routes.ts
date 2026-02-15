@@ -686,27 +686,22 @@ JSON形式で回答してください:
         return res.status(404).json({ message: "Skill card not found" });
       }
 
-      const prompt = `あなたは営業トレーニングの講師です。以下のスキルに基づいて、短い練習問題を1つ作成してください。
+      const prompt = `営業トレーニングの練習問題を1つ作成してください。
 
-スキル名: ${card.titleJa}
-説明: ${card.descriptionJa}
+対象スキル: ${card.titleJa}
+スキル説明: ${card.descriptionJa}
 カテゴリ: ${card.category}
-良い例: ${card.goodExampleJa}
 
-練習問題は、実際の営業シーンを想定した短いシナリオ（2-3文）と、ユーザーが回答すべき質問を含めてください。
-
-JSON形式で回答してください:
-{
-  "scenario": "具体的な営業シナリオの説明（2-3文）",
-  "question": "この状況で、あなたならどう対応しますか？（具体的な質問）",
-  "hint": "回答のヒント（1文）",
-  "idealPoints": ["理想的な回答に含まれるべきポイント1", "ポイント2", "ポイント3"]
-}`;
+必ず以下のJSON形式のみで回答してください。キー名は英語のまま使用し、値は日本語で書いてください:
+{"scenario": "BtoB営業の具体的なシナリオ（2-3文で状況を説明）", "question": "この状況でどう対応するか具体的に聞く質問文", "hint": "回答のヒント1文", "idealPoints": ["ポイント1", "ポイント2", "ポイント3"]}`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
-        messages: [{ role: "user", content: prompt }],
-        max_completion_tokens: 512,
+        messages: [
+          { role: "system", content: "あなたは営業トレーニングの講師です。必ずJSON形式のみで回答してください。余計なテキストは含めないでください。" },
+          { role: "user", content: prompt },
+        ],
+        max_completion_tokens: 1024,
         response_format: { type: "json_object" },
       });
 
@@ -715,18 +710,35 @@ JSON形式で回答してください:
 
       let exercise;
       try {
-        const parsed = JSON.parse(rawContent);
+        let parsed = JSON.parse(rawContent);
+        if (parsed.exercise) parsed = parsed.exercise;
+        if (parsed.practice) parsed = parsed.practice;
+        if (parsed.problem) parsed = parsed.problem;
+
+        const scenario = parsed.scenario || parsed.シナリオ || parsed.situation || "";
+        const question = parsed.question || parsed.質問 || parsed.問題 || "";
+        const hint = parsed.hint || parsed.ヒント || "";
+        const idealPoints = Array.isArray(parsed.idealPoints) ? parsed.idealPoints
+          : Array.isArray(parsed.ideal_points) ? parsed.ideal_points
+          : Array.isArray(parsed.ポイント) ? parsed.ポイント
+          : [];
+
+        if (!scenario && !question) {
+          throw new Error("No valid fields found in AI response");
+        }
+
         exercise = {
-          scenario: parsed.scenario || "シナリオの生成に失敗しました。",
-          question: parsed.question || "もう一度お試しください。",
-          hint: parsed.hint || "",
-          idealPoints: Array.isArray(parsed.idealPoints) ? parsed.idealPoints : [],
+          scenario: scenario || `${card.titleJa}に関する営業シーンです。`,
+          question: question || `この状況で${card.titleJa}をどのように活用しますか？`,
+          hint: hint || `${card.titleJa}のポイントを意識して回答してみましょう。`,
+          idealPoints: idealPoints.length > 0 ? idealPoints : (card.tipsJa?.slice(0, 3) || []),
         };
-      } catch {
+      } catch (parseErr) {
+        console.error("Failed to parse practice exercise response:", parseErr);
         exercise = {
-          scenario: "練習問題の生成に失敗しました。もう一度お試しください。",
-          question: "このスキルを使った営業シーンを想像し、お客様への対応を考えてみましょう。",
-          hint: `${card.titleJa}のポイントを意識して回答してみましょう。`,
+          scenario: `あなたはIT企業の営業担当です。新規顧客との初回商談で、相手の課題をヒアリングする場面を想定してください。「${card.titleJa}」のスキルを実践する機会です。`,
+          question: `この商談で「${card.titleJa}」をどのように活用しますか？具体的な発言例を含めて回答してください。`,
+          hint: `${card.descriptionJa?.slice(0, 50)}を意識して回答してみましょう。`,
           idealPoints: card.tipsJa?.slice(0, 3) || [],
         };
       }
@@ -770,14 +782,23 @@ JSON形式で回答してください:
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
-        messages: [{ role: "user", content: prompt }],
-        max_completion_tokens: 512,
+        messages: [
+          { role: "system", content: "あなたは営業スキルの指導者です。必ずJSON形式のみで回答してください。" },
+          { role: "user", content: prompt },
+        ],
+        max_completion_tokens: 1024,
         response_format: { type: "json_object" },
       });
 
       let evaluation;
       try {
-        evaluation = JSON.parse(response.choices[0]?.message?.content || '{}');
+        const parsed = JSON.parse(response.choices[0]?.message?.content || '{}');
+        const score = parseInt(parsed.score || parsed.スコア || parsed.rating || "3");
+        evaluation = {
+          score: isNaN(score) ? 3 : Math.max(1, Math.min(5, score)),
+          feedback: parsed.feedback || parsed.フィードバック || parsed.評価 || "回答を評価しました。",
+          improvedAnswer: parsed.improvedAnswer || parsed.improved_answer || parsed.模範回答 || "",
+        };
       } catch {
         evaluation = {
           score: 3,
