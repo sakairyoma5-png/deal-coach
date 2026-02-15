@@ -26,6 +26,9 @@ import {
   Pencil,
   ChevronRight,
   Sparkles,
+  GraduationCap,
+  Swords,
+  Trophy,
 } from "lucide-react";
 
 interface ChatMessage {
@@ -41,6 +44,42 @@ const personalityTypes = [
   { id: "skeptical", label: "懐疑型", description: "警戒心が強く、矛盾点を突いてくる", icon: Search, color: "text-red-500 bg-red-500/10" },
   { id: "busy", label: "多忙型", description: "時間がない、要点だけを短く聞きたい", icon: Clock, color: "text-violet-500 bg-violet-500/10" },
 ];
+
+const difficultyLevels = [
+  { id: "easy", label: "初級", description: "協力的な顧客。ヒントをくれる", icon: GraduationCap, color: "text-emerald-500 bg-emerald-500/10" },
+  { id: "medium", label: "中級", description: "標準的な顧客。適度な質問・反論", icon: Swords, color: "text-amber-500 bg-amber-500/10" },
+  { id: "hard", label: "上級", description: "厳しい反論・予想外の質問が来る", icon: Trophy, color: "text-red-500 bg-red-500/10" },
+];
+
+function DifficultySelector({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div>
+      <label className="text-sm font-medium mb-2 block">難易度</label>
+      <div className="grid grid-cols-3 gap-2">
+        {difficultyLevels.map((level) => {
+          const Icon = level.icon;
+          const isSelected = value === level.id;
+          return (
+            <Card
+              key={level.id}
+              className={`p-2.5 cursor-pointer transition-all text-center ${
+                isSelected ? "ring-2 ring-primary" : "hover-elevate"
+              }`}
+              onClick={() => onChange(level.id)}
+              data-testid={`card-difficulty-${level.id}`}
+            >
+              <div className={`w-8 h-8 rounded-md flex items-center justify-center mx-auto mb-1 ${level.color}`}>
+                <Icon className="w-4 h-4" />
+              </div>
+              <span className="font-semibold text-sm block">{level.label}</span>
+              <p className="text-[10px] text-muted-foreground leading-tight mt-0.5">{level.description}</p>
+            </Card>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 const phaseOptions = [
   "初期接触（テレアポ・初回訪問）",
@@ -163,6 +202,7 @@ function RoleplayChat({
     },
   });
 
+  const difficultyLabel = difficultyLevels.find((d) => d.id === config.difficulty)?.label || "中級";
   const headerTitle = mode === "personality"
     ? `${personalityTypes.find((p) => p.id === config.personalityType)?.label || ""}との商談`
     : "カスタム商談";
@@ -177,7 +217,7 @@ function RoleplayChat({
             </Button>
             <div className="min-w-0">
               <h1 className="font-semibold text-sm truncate">{headerTitle}</h1>
-              <p className="text-[10px] text-muted-foreground truncate">{config.product || ""}</p>
+              <p className="text-[10px] text-muted-foreground truncate">{config.product || ""} / {difficultyLabel}</p>
             </div>
           </div>
           <Button
@@ -268,6 +308,7 @@ function PersonalityModeForm({ onStart, onBack }: { onStart: (config: any) => vo
   const [selectedType, setSelectedType] = useState<string | null>(null);
   const [product, setProduct] = useState("");
   const [goal, setGoal] = useState("");
+  const [difficulty, setDifficulty] = useState("medium");
 
   const canStart = selectedType && product.trim();
 
@@ -340,6 +381,8 @@ function PersonalityModeForm({ onStart, onBack }: { onStart: (config: any) => vo
           />
         </div>
 
+        <DifficultySelector value={difficulty} onChange={setDifficulty} />
+
         <Button
           className="w-full"
           disabled={!canStart}
@@ -348,6 +391,7 @@ function PersonalityModeForm({ onStart, onBack }: { onStart: (config: any) => vo
               personalityType: selectedType,
               product: product.trim(),
               goal: goal.trim() || "商談を成功させる",
+              difficulty,
             })
           }
           data-testid="button-start-personality"
@@ -369,6 +413,7 @@ function CustomModeForm({ onStart, onBack }: { onStart: (config: any) => void; o
   const [phase, setPhase] = useState("");
   const [product, setProduct] = useState("");
   const [additionalInfo, setAdditionalInfo] = useState("");
+  const [difficulty, setDifficulty] = useState("medium");
   const [aiQuestions, setAiQuestions] = useState<string[]>([]);
   const [aiAnswers, setAiAnswers] = useState<string[]>([]);
   const [showQuestions, setShowQuestions] = useState(false);
@@ -398,6 +443,7 @@ function CustomModeForm({ onStart, onBack }: { onStart: (config: any) => void; o
     relationship: relationship.trim(),
     phase,
     product: product.trim(),
+    difficulty,
     additionalInfo: additionalInfo.trim() + (aiAnswers.length > 0 ? "\n\n追加情報:\n" + aiQuestions.map((q, i) => `Q: ${q}\nA: ${aiAnswers[i]}`).join("\n") : ""),
   });
 
@@ -562,6 +608,8 @@ function CustomModeForm({ onStart, onBack }: { onStart: (config: any) => void; o
             data-testid="input-additional-info"
           />
         </div>
+
+        <DifficultySelector value={difficulty} onChange={setDifficulty} />
 
         <Button
           className="w-full"

@@ -66,10 +66,32 @@ export async function registerRoutes(
         const personalityType = config.personalityType || "cautious";
         const product = config.product || "不明な商品";
         const goal = config.goal || "商談成立";
+        const difficulty = config.difficulty || "medium";
+
+        const difficultyInstructions: Record<string, string> = {
+          easy: `難易度: 初級（協力的な顧客）
+- 営業担当の提案に興味を示し、前向きに話を聞いてください
+- 質問は素直で、反論はほとんどしません
+- 営業担当が詰まった時はヒントを出してあげてください
+- 比較的簡単に情報を共有し、課題やニーズを率直に話してください`,
+          medium: `難易度: 中級（標準的な顧客）
+- 適度に質問や反論をしてください
+- 価格やROIについて合理的な質問をしてください
+- 競合との比較や導入リスクについて確認してください
+- すぐには決断せず、検討する姿勢を見せてください`,
+          hard: `難易度: 上級（厳しい顧客）
+- 積極的に反論し、営業担当の論理の穴を突いてください
+- 競合情報を持ち出し、価格交渉を厳しく行ってください
+- 予想外の質問や条件を突きつけてください
+- 簡単には納得せず、具体的な根拠やデータを要求してください
+- 時には話題を逸らしたり、別の課題を持ち出したりしてください`,
+        };
 
         systemMessage = `あなたは営業ロープレの顧客役です。以下の設定に基づいて、リアルな顧客として振る舞ってください。
 
 性格タイプ: ${personalityDescriptions[personalityType] || personalityDescriptions.cautious}
+
+${difficultyInstructions[difficulty] || difficultyInstructions.medium}
 
 営業担当が提案する商品/サービス: ${product}
 営業担当のゴール: ${goal}
@@ -77,6 +99,7 @@ export async function registerRoutes(
 ルール:
 - 日本語で会話してください
 - 設定された性格タイプに忠実に振る舞ってください
+- 難易度に応じた態度で応答してください
 - 顧客としてリアルに反応し、性格に応じた質問や反論をしてください
 - 最初の挨拶から始めてください
 - 簡潔に（2-3文程度で）応答してください
@@ -89,6 +112,20 @@ export async function registerRoutes(
         const phase = config.phase || "";
         const product = config.product || "";
         const additionalInfo = config.additionalInfo || "";
+        const customDifficulty = config.difficulty || "medium";
+
+        const customDifficultyInstructions: Record<string, string> = {
+          easy: `難易度: 初級（協力的な顧客）
+- 前向きに話を聞き、課題やニーズを率直に共有してください
+- 反論はほとんどせず、営業担当が詰まった時はヒントを出してください`,
+          medium: `難易度: 中級（標準的な顧客）
+- 適度に質問や反論をし、価格やROIについて合理的に確認してください
+- すぐには決断せず、検討する姿勢を見せてください`,
+          hard: `難易度: 上級（厳しい顧客）
+- 積極的に反論し、論理の穴を突いてください
+- 競合情報を持ち出し、予想外の条件を突きつけてください
+- 簡単には納得せず、具体的な根拠やデータを要求してください`,
+        };
 
         systemMessage = `あなたは営業ロープレの顧客役です。以下の詳細設定に基づいて、リアルな顧客として振る舞ってください。
 
@@ -99,10 +136,13 @@ export async function registerRoutes(
 提案する商品/サービス: ${product}
 その他の情報: ${additionalInfo}
 
+${customDifficultyInstructions[customDifficulty] || customDifficultyInstructions.medium}
+
 ルール:
 - 日本語で会話してください
 - 上記の情報を総合的に判断し、適切な人格・態度・反応パターンを自分で決定してください
 - 商談フェーズに応じた適切な態度を取ってください（初期接触なら警戒、クロージングなら具体的条件の確認など）
+- 難易度に応じた態度で応答してください
 - 顧客としてリアルに反応してください
 - 最初の挨拶から始めてください
 - 簡潔に（2-3文程度で）応答してください
