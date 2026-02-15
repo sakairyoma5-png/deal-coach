@@ -678,7 +678,7 @@ JSON形式で回答してください:
     }
   });
 
-  app.post("/api/skill-cards/:id/practice", isAuthenticated, async (req: any, res) => {
+  app.post("/api/skill-cards/:id/practice/start", isAuthenticated, async (req: any, res) => {
     try {
       const cardId = parseInt(req.params.id);
       const card = await storage.getSkillCard(cardId);
@@ -686,76 +686,59 @@ JSON形式で回答してください:
         return res.status(404).json({ message: "Skill card not found" });
       }
 
-      const prompt = `営業トレーニングの練習問題を1つ作成してください。
+      const prompt = `あなたはBtoB営業のお客様役です。以下のスキルを練習させるための短い商談シナリオを作成し、お客様として最初の発言をしてください。
 
-対象スキル: ${card.titleJa}
+練習対象スキル: ${card.titleJa}
 スキル説明: ${card.descriptionJa}
 カテゴリ: ${card.category}
 
-必ず以下のJSON形式のみで回答してください。キー名は英語のまま使用し、値は日本語で書いてください:
-{"scenario": "BtoB営業の具体的なシナリオ（2-3文で状況を説明）", "question": "この状況でどう対応するか具体的に聞く質問文", "hint": "回答のヒント1文", "idealPoints": ["ポイント1", "ポイント2", "ポイント3"]}`;
+以下のJSON形式で回答してください:
+{"scenario": "商談の背景説明（業種・状況・課題を2-3文で）", "customerName": "お客様の名前（例：田中部長）", "customerRole": "お客様の役職と会社概要（例：製造業A社の情報システム部長）", "firstMessage": "お客様としての最初の発言（1-3文。自然な会話口調で）", "targetTurns": 4}`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
         messages: [
-          { role: "system", content: "あなたは営業トレーニングの講師です。必ずJSON形式のみで回答してください。余計なテキストは含めないでください。" },
+          { role: "system", content: "あなたは営業トレーニング用のシナリオ作成者です。必ずJSON形式のみで回答してください。" },
           { role: "user", content: prompt },
         ],
         max_completion_tokens: 1024,
         response_format: { type: "json_object" },
       });
 
-      const rawContent = response.choices[0]?.message?.content || '';
-      console.log("Practice exercise raw response:", rawContent.slice(0, 500));
-
-      let exercise;
+      const rawContent = response.choices[0]?.message?.content || '{}';
+      let result;
       try {
-        let parsed = JSON.parse(rawContent);
-        if (parsed.exercise) parsed = parsed.exercise;
-        if (parsed.practice) parsed = parsed.practice;
-        if (parsed.problem) parsed = parsed.problem;
-
-        const scenario = parsed.scenario || parsed.シナリオ || parsed.situation || "";
-        const question = parsed.question || parsed.質問 || parsed.問題 || "";
-        const hint = parsed.hint || parsed.ヒント || "";
-        const idealPoints = Array.isArray(parsed.idealPoints) ? parsed.idealPoints
-          : Array.isArray(parsed.ideal_points) ? parsed.ideal_points
-          : Array.isArray(parsed.ポイント) ? parsed.ポイント
-          : [];
-
-        if (!scenario && !question) {
-          throw new Error("No valid fields found in AI response");
-        }
-
-        exercise = {
-          scenario: scenario || `${card.titleJa}に関する営業シーンです。`,
-          question: question || `この状況で${card.titleJa}をどのように活用しますか？`,
-          hint: hint || `${card.titleJa}のポイントを意識して回答してみましょう。`,
-          idealPoints: idealPoints.length > 0 ? idealPoints : (card.tipsJa?.slice(0, 3) || []),
+        const parsed = JSON.parse(rawContent);
+        result = {
+          scenario: parsed.scenario || parsed.シナリオ || `${card.titleJa}を実践する商談場面です。お客様が課題について相談しています。`,
+          customerName: parsed.customerName || parsed.顧客名 || "田中部長",
+          customerRole: parsed.customerRole || parsed.顧客役職 || "中堅企業の情報システム部長",
+          firstMessage: parsed.firstMessage || parsed.first_message || parsed.最初の発言 || "先日ご紹介いただいた件ですが、もう少し詳しくお話を聞かせていただけますか？",
+          targetTurns: Math.min(Math.max(parseInt(parsed.targetTurns) || 4, 3), 5),
         };
-      } catch (parseErr) {
-        console.error("Failed to parse practice exercise response:", parseErr);
-        exercise = {
-          scenario: `あなたはIT企業の営業担当です。新規顧客との初回商談で、相手の課題をヒアリングする場面を想定してください。「${card.titleJa}」のスキルを実践する機会です。`,
-          question: `この商談で「${card.titleJa}」をどのように活用しますか？具体的な発言例を含めて回答してください。`,
-          hint: `${card.descriptionJa?.slice(0, 50)}を意識して回答してみましょう。`,
-          idealPoints: card.tipsJa?.slice(0, 3) || [],
+      } catch {
+        result = {
+          scenario: `あなたはIT企業の営業担当です。中堅製造業のお客様から業務効率化の相談を受けています。「${card.titleJa}」のスキルを意識して会話してください。`,
+          customerName: "田中部長",
+          customerRole: "中堅製造業A社の業務改革推進室長",
+          firstMessage: "先日ご紹介いただいた御社のサービスについてですが、正直なところ、本当にうちの課題に合うのか少し不安がありまして。もう少し詳しくお聞きしたいのですが。",
+          targetTurns: 4,
         };
       }
 
-      res.json(exercise);
+      res.json(result);
     } catch (error) {
-      console.error("Error generating practice:", error);
-      res.status(500).json({ message: "Failed to generate practice exercise" });
+      console.error("Error starting practice chat:", error);
+      res.status(500).json({ message: "練習の開始に失敗しました" });
     }
   });
 
-  app.post("/api/skill-cards/:id/practice/evaluate", isAuthenticated, async (req: any, res) => {
+  app.post("/api/skill-cards/:id/practice/message", isAuthenticated, async (req: any, res) => {
     try {
       const cardId = parseInt(req.params.id);
-      const { scenario, question, userAnswer } = req.body;
-      if (!userAnswer || !scenario || !question) {
-        return res.status(400).json({ message: "シナリオ、質問、回答はすべて必須です" });
+      const { messages, scenario, customerName, customerRole, currentTurn, targetTurns } = req.body;
+      if (!messages || !Array.isArray(messages)) {
+        return res.status(400).json({ message: "会話履歴が必要です" });
       }
 
       const card = await storage.getSkillCard(cardId);
@@ -763,33 +746,102 @@ JSON形式で回答してください:
         return res.status(404).json({ message: "Skill card not found" });
       }
 
-      const prompt = `以下の営業練習問題に対するユーザーの回答を詳しく評価してください。
+      const safeTurns = Math.max(3, parseInt(targetTurns) || 4);
+      const safeCurrent = parseInt(currentTurn) || 1;
+      const isLastTurn = safeCurrent >= safeTurns;
+      const conversationHistory = messages.map((m: { role: string; content: string }) =>
+        `${m.role === 'customer' ? customerName : '営業（あなた）'}: ${m.content}`
+      ).join('\n');
 
-対象スキル: ${card.titleJa}
-スキル説明: ${card.descriptionJa}
-お手本の営業トーク: ${card.goodExampleJa}
+      const systemPrompt = `あなたは${customerRole}の「${customerName}」です。以下のシナリオでBtoB商談のお客様役を演じてください。
 
-【練習問題】
 シナリオ: ${scenario}
-質問: ${question}
 
-【ユーザーの回答】
-${userAnswer}
+ルール:
+- 自然な日本語の会話口調で応答してください
+- お客様として現実的な反応をしてください（質問への回答、懸念の表明、追加の質問など）
+- 営業の対応が良ければ少し前向きに、不十分なら少し困惑した反応をしてください
+- 1-3文で簡潔に応答してください
+${isLastTurn ? '- これが最後のやり取りです。会話をまとめる方向で応答してください。' : ''}
 
-必ず以下のJSON形式のみで回答してください。キー名は英語のまま、値は日本語で書いてください:
-{"score": 3, "goodPoints": ["良かった点1", "良かった点2"], "improvements": ["改善すべき点1", "改善すべき点2"], "overallFeedback": "総合的な評価コメント（2-3文）", "modelAnswer": "この場面での模範的な営業トークの例（具体的な発言内容を3-4文で）"}
-
-評価基準:
-- score: 1（不十分）〜5（非常に優秀）の整数
-- goodPoints: ユーザーの回答で良かった具体的なポイント（最低1つ）
-- improvements: 具体的に何を改善すべきか（最低1つ）
-- overallFeedback: 全体的な評価とアドバイス
-- modelAnswer: このシナリオでの理想的な営業トークの具体例`;
+必ずJSON形式で回答してください:
+{"message": "お客様としての応答（1-3文）", "isEnd": ${isLastTurn}}`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
         messages: [
-          { role: "system", content: "あなたはベテランの営業マネージャーです。部下の営業トレーニングを担当しています。必ずJSON形式のみで回答してください。余計なテキストは含めないでください。" },
+          { role: "system", content: systemPrompt },
+          { role: "user", content: `これまでの会話:\n${conversationHistory}\n\n上記の会話に続けて、お客様として応答してください。` },
+        ],
+        max_completion_tokens: 512,
+        response_format: { type: "json_object" },
+      });
+
+      const rawContent = response.choices[0]?.message?.content || '{}';
+      let result;
+      try {
+        const parsed = JSON.parse(rawContent);
+        result = {
+          message: parsed.message || parsed.応答 || parsed.response || "なるほど、もう少し考えさせてください。",
+          isEnd: isLastTurn || parsed.isEnd === true,
+        };
+      } catch {
+        result = {
+          message: "なるほど、そういうことですか。もう少し検討させてください。",
+          isEnd: isLastTurn,
+        };
+      }
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error in practice chat message:", error);
+      res.status(500).json({ message: "応答の生成に失敗しました" });
+    }
+  });
+
+  app.post("/api/skill-cards/:id/practice/evaluate", isAuthenticated, async (req: any, res) => {
+    try {
+      const cardId = parseInt(req.params.id);
+      const { messages, scenario, customerName } = req.body;
+      if (!messages || !Array.isArray(messages) || messages.length < 2) {
+        return res.status(400).json({ message: "評価するには会話履歴が必要です" });
+      }
+
+      const card = await storage.getSkillCard(cardId);
+      if (!card) {
+        return res.status(404).json({ message: "Skill card not found" });
+      }
+
+      const conversationText = messages.map((m: { role: string; content: string }) =>
+        `${m.role === 'customer' ? customerName || 'お客様' : '営業'}: ${m.content}`
+      ).join('\n');
+
+      const prompt = `以下のBtoB営業の練習会話を詳しく評価してください。
+
+対象スキル: ${card.titleJa}
+スキル説明: ${card.descriptionJa}
+お手本の営業トーク: ${card.goodExampleJa}
+スキルのポイント: ${(card.tipsJa || []).join('、')}
+
+【シナリオ】
+${scenario}
+
+【会話内容】
+${conversationText}
+
+必ず以下のJSON形式のみで回答してください:
+{"score": 3, "goodPoints": ["会話で良かった具体的なポイント1", "ポイント2"], "improvements": ["改善すべき具体的なポイント1", "ポイント2"], "overallFeedback": "総合評価（2-3文）", "modelConversation": "同じシナリオでの模範的な営業トーク例（営業の発言を3-4文で。営業：で始める）"}
+
+評価基準:
+- score: 1〜5（${card.titleJa}のスキルをどれだけ活用できたか）
+- goodPoints: 会話の中で良かった具体的な箇所（最低1つ）
+- improvements: 会話の中で改善すべき具体的な箇所（最低1つ）
+- modelConversation: このシナリオでの理想的な営業の会話例`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-5-nano",
+        messages: [
+          { role: "system", content: "あなたはベテランの営業マネージャーです。部下の営業トレーニングの会話を評価しています。必ずJSON形式のみで回答してください。" },
           { role: "user", content: prompt },
         ],
         max_completion_tokens: 1500,
@@ -797,8 +849,6 @@ ${userAnswer}
       });
 
       const rawEval = response.choices[0]?.message?.content || '{}';
-      console.log("Practice evaluation raw response:", rawEval.slice(0, 500));
-
       let evaluation;
       try {
         const parsed = JSON.parse(rawEval);
@@ -809,32 +859,31 @@ ${userAnswer}
           : [];
         const improvements = Array.isArray(parsed.improvements) ? parsed.improvements
           : Array.isArray(parsed.改善点) ? parsed.改善点
-          : Array.isArray(parsed.improvement_points) ? parsed.improvement_points
           : [];
 
-        const rawModelAnswer = (parsed.modelAnswer || parsed.model_answer || parsed.模範回答 || parsed.improvedAnswer || parsed.improved_answer || "").trim();
+        const rawModelConv = (parsed.modelConversation || parsed.model_conversation || parsed.模範会話 || parsed.modelAnswer || parsed.model_answer || "").trim();
 
         evaluation = {
           score: isNaN(score) ? 3 : Math.max(1, Math.min(5, score)),
-          goodPoints: goodPoints.length > 0 ? goodPoints : ["回答を提出した積極性が良いです。"],
-          improvements: improvements.length > 0 ? improvements : ["より具体的な発言例を含めるとさらに良くなります。"],
-          overallFeedback: (parsed.overallFeedback || parsed.overall_feedback || parsed.総合評価 || parsed.feedback || parsed.フィードバック || "").trim() || "回答を評価しました。練習を繰り返すことでスキルが向上します。",
-          modelAnswer: rawModelAnswer || card.goodExampleJa || `このシナリオでは「${card.titleJa}」のスキルを使い、お客様の課題に寄り添った具体的な提案を行うことが理想的です。`,
+          goodPoints: goodPoints.length > 0 ? goodPoints : ["会話に積極的に取り組んだ点が評価できます。"],
+          improvements: improvements.length > 0 ? improvements : ["より具体的な提案を含めるとさらに効果的です。"],
+          overallFeedback: (parsed.overallFeedback || parsed.overall_feedback || parsed.総合評価 || parsed.feedback || "").trim() || "練習お疲れさまでした。繰り返し練習することでスキルが向上します。",
+          modelConversation: rawModelConv || card.goodExampleJa || `このシナリオでは「${card.titleJa}」のスキルを使い、お客様の課題に寄り添った具体的な提案を行うことが理想的です。`,
         };
       } catch {
         evaluation = {
           score: 3,
-          goodPoints: ["回答を提出した積極性が評価できます。"],
+          goodPoints: ["会話に積極的に取り組んだ点が評価できます。"],
           improvements: ["より具体的な発言例を含めると、実践で使えるスキルが身につきます。"],
           overallFeedback: "評価の生成に一部失敗しましたが、練習を続けることが大切です。",
-          modelAnswer: card.goodExampleJa || "",
+          modelConversation: card.goodExampleJa || "",
         };
       }
 
       res.json(evaluation);
     } catch (error) {
       console.error("Error evaluating practice:", error);
-      res.status(500).json({ message: "Failed to evaluate practice answer" });
+      res.status(500).json({ message: "評価の生成に失敗しました" });
     }
   });
 

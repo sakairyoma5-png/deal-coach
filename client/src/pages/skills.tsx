@@ -52,67 +52,102 @@ function SkillCardDetail({
 }) {
   const { toast } = useToast();
   const [completed, setCompleted] = useState(isCompleted);
-  const [practiceExercise, setPracticeExercise] = useState<{
-    scenario: string;
-    question: string;
-    hint: string;
-    idealPoints: string[];
-  } | null>(null);
-  const [userAnswer, setUserAnswer] = useState("");
+
+  type ChatMessage = { role: 'customer' | 'user'; content: string };
+  const [practiceState, setPracticeState] = useState<'idle' | 'chatting' | 'evaluating' | 'done'>('idle');
+  const [practiceScenario, setPracticeScenario] = useState("");
+  const [customerName, setCustomerName] = useState("");
+  const [customerRole, setCustomerRole] = useState("");
+  const [targetTurns, setTargetTurns] = useState(4);
+  const [currentTurn, setCurrentTurn] = useState(0);
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [userInput, setUserInput] = useState("");
   const [evaluation, setEvaluation] = useState<{
     score: number;
     goodPoints: string[];
     improvements: string[];
     overallFeedback: string;
-    modelAnswer: string;
+    modelConversation: string;
   } | null>(null);
-  const [showHint, setShowHint] = useState(false);
 
-  const generatePracticeMutation = useMutation({
+  const startPracticeMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", `/api/skill-cards/${card.id}/practice`);
+      const res = await apiRequest("POST", `/api/skill-cards/${card.id}/practice/start`);
       return await res.json();
     },
     onSuccess: (data) => {
-      if (data && data.scenario) {
-        setPracticeExercise(data);
-      } else {
-        setPracticeExercise({
-          scenario: data?.scenario || "シナリオの取得に失敗しました。もう一度お試しください。",
-          question: data?.question || "このスキルをどのように活用しますか？",
-          hint: data?.hint || "",
-          idealPoints: data?.idealPoints || [],
-        });
-      }
-      setUserAnswer("");
+      setPracticeScenario(data.scenario || "");
+      setCustomerName(data.customerName || "田中部長");
+      setCustomerRole(data.customerRole || "");
+      setTargetTurns(data.targetTurns || 4);
+      setCurrentTurn(1);
+      setChatMessages([{ role: 'customer', content: data.firstMessage || "お話を聞かせてください。" }]);
+      setPracticeState('chatting');
       setEvaluation(null);
-      setShowHint(false);
+      setUserInput("");
     },
     onError: () => {
-      toast({ title: "エラー", description: "練習問題の生成に失敗しました", variant: "destructive" });
+      toast({ title: "エラー", description: "練習の開始に失敗しました", variant: "destructive" });
+    },
+  });
+
+  const sendMessageMutation = useMutation({
+    mutationFn: async (userMessage: string) => {
+      const newMessages = [...chatMessages, { role: 'user' as const, content: userMessage }];
+      const nextTurn = currentTurn + 1;
+      const res = await apiRequest("POST", `/api/skill-cards/${card.id}/practice/message`, {
+        messages: newMessages,
+        scenario: practiceScenario,
+        customerName,
+        customerRole,
+        currentTurn: nextTurn,
+        targetTurns,
+      });
+      return { response: await res.json(), userMessage, nextTurn };
+    },
+    onSuccess: ({ response, userMessage, nextTurn }) => {
+      const customerMsg = response.message || "なるほど、そうですか。";
+      const newMessages: ChatMessage[] = [
+        ...chatMessages,
+        { role: 'user', content: userMessage },
+        { role: 'customer', content: customerMsg },
+      ];
+      setChatMessages(newMessages);
+      setCurrentTurn(nextTurn);
+      setUserInput("");
+
+      if (response.isEnd || nextTurn >= targetTurns) {
+        setPracticeState('evaluating');
+        evaluateMutation.mutate(newMessages);
+      }
+    },
+    onError: () => {
+      toast({ title: "エラー", description: "応答の取得に失敗しました", variant: "destructive" });
     },
   });
 
   const evaluateMutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (msgs: ChatMessage[]) => {
       const res = await apiRequest("POST", `/api/skill-cards/${card.id}/practice/evaluate`, {
-        scenario: practiceExercise?.scenario,
-        question: practiceExercise?.question,
-        userAnswer,
+        messages: msgs,
+        scenario: practiceScenario,
+        customerName,
       });
       return await res.json();
     },
     onSuccess: (data) => {
       setEvaluation({
         score: typeof data?.score === 'number' ? Math.max(1, Math.min(5, data.score)) : 3,
-        goodPoints: Array.isArray(data?.goodPoints) && data.goodPoints.length > 0 ? data.goodPoints : ["回答を提出した積極性が良いです。"],
-        improvements: Array.isArray(data?.improvements) && data.improvements.length > 0 ? data.improvements : ["より具体的な発言例を含めるとさらに良くなります。"],
-        overallFeedback: data?.overallFeedback || "回答を評価しました。練習を繰り返すことでスキルが向上します。",
-        modelAnswer: data?.modelAnswer || card.goodExampleJa || `このスキル「${card.titleJa}」を活用した具体的な営業トークを意識して練習しましょう。`,
+        goodPoints: Array.isArray(data?.goodPoints) && data.goodPoints.length > 0 ? data.goodPoints : ["会話に積極的に取り組みました。"],
+        improvements: Array.isArray(data?.improvements) && data.improvements.length > 0 ? data.improvements : ["より具体的な提案を含めると効果的です。"],
+        overallFeedback: data?.overallFeedback || "練習お疲れさまでした。",
+        modelConversation: data?.modelConversation || card.goodExampleJa || "",
       });
+      setPracticeState('done');
     },
     onError: () => {
       toast({ title: "エラー", description: "評価の生成に失敗しました", variant: "destructive" });
+      setPracticeState('done');
     },
   });
 
@@ -300,82 +335,120 @@ function SkillCardDetail({
         <Card className="p-4" data-testid="section-practice">
           <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
             <div className="flex items-center gap-2">
-              <Zap className="w-4 h-4 text-primary" />
-              <h3 className="font-semibold text-sm">実習</h3>
+              <Sparkles className="w-4 h-4 text-primary" />
+              <h3 className="font-semibold text-sm">実習チャット</h3>
             </div>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => generatePracticeMutation.mutate()}
-              disabled={generatePracticeMutation.isPending}
-              data-testid="button-generate-practice"
-            >
-              {generatePracticeMutation.isPending ? (
-                <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-              ) : (
-                <Zap className="w-3.5 h-3.5 mr-1.5" />
-              )}
-              {practiceExercise ? "別の問題" : "問題を生成"}
-            </Button>
+            {(practiceState === 'idle' || practiceState === 'done') && (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => startPracticeMutation.mutate()}
+                disabled={startPracticeMutation.isPending}
+                data-testid="button-start-practice"
+              >
+                {startPracticeMutation.isPending ? (
+                  <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
+                ) : (
+                  <Zap className="w-3.5 h-3.5 mr-1.5" />
+                )}
+                {practiceState === 'done' ? "もう一度練習" : "練習を開始"}
+              </Button>
+            )}
           </div>
 
-          {!practiceExercise && !generatePracticeMutation.isPending && (
+          {practiceState === 'idle' && !startPracticeMutation.isPending && (
             <p className="text-xs text-muted-foreground">
-              AIが実際の営業シーンに基づいた練習問題を生成します。回答するとAIからフィードバックが受けられます。
+              AIがお客様役となり、実際の商談をシミュレーションします。会話形式で練習し、終了後にAIコーチが評価します。
             </p>
           )}
 
-          {practiceExercise && (
-            <div className="space-y-4 mt-2">
-              <div className="bg-muted/50 rounded-md p-3">
-                <p className="text-sm font-medium mb-2">シナリオ</p>
-                <p className="text-sm text-muted-foreground leading-relaxed">{practiceExercise.scenario}</p>
+          {practiceState !== 'idle' && (
+            <div className="space-y-3 mt-1">
+              <div className="bg-muted/50 rounded-md p-2.5">
+                <p className="text-xs text-muted-foreground leading-relaxed">{practiceScenario}</p>
+                <p className="text-xs text-muted-foreground mt-1">相手: <span className="font-medium text-foreground">{customerName}</span>（{customerRole}）</p>
               </div>
 
-              <div>
-                <p className="text-sm font-medium mb-2">{practiceExercise.question}</p>
-                {practiceExercise.hint && (
-                  <div className="mb-2">
-                    {showHint ? (
-                      <p className="text-xs text-muted-foreground bg-amber-500/10 p-2 rounded-md">
-                        <Lightbulb className="w-3 h-3 inline mr-1 text-amber-500" />
-                        {practiceExercise.hint}
+              {practiceState === 'chatting' && (
+                <div className="flex items-center gap-1.5">
+                  <div className="h-1.5 flex-1 bg-muted rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-primary rounded-full transition-all"
+                      style={{ width: `${Math.min(100, (currentTurn / targetTurns) * 100)}%` }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-muted-foreground shrink-0">{currentTurn}/{targetTurns}</span>
+                </div>
+              )}
+
+              <div className="space-y-2" data-testid="section-practice-chat">
+                {chatMessages.map((msg, i) => (
+                  <div
+                    key={i}
+                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                    data-testid={`chat-message-${i}`}
+                  >
+                    <div
+                      className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
+                        msg.role === 'user'
+                          ? 'bg-primary text-primary-foreground rounded-br-sm'
+                          : 'bg-muted rounded-bl-sm'
+                      }`}
+                    >
+                      <p className={`text-[10px] font-medium mb-0.5 ${msg.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
+                        {msg.role === 'user' ? 'あなた（営業）' : customerName}
                       </p>
-                    ) : (
-                      <button
-                        onClick={() => setShowHint(true)}
-                        className="text-xs text-primary hover:underline"
-                        data-testid="button-show-hint"
-                      >
-                        ヒントを見る
-                      </button>
-                    )}
+                      {msg.content}
+                    </div>
+                  </div>
+                ))}
+
+                {sendMessageMutation.isPending && (
+                  <div className="flex justify-start">
+                    <div className="bg-muted rounded-2xl rounded-bl-sm px-3 py-2 text-sm">
+                      <p className="text-[10px] font-medium mb-0.5 text-muted-foreground">{customerName}</p>
+                      <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                    </div>
                   </div>
                 )}
-                <Textarea
-                  value={userAnswer}
-                  onChange={(e) => setUserAnswer(e.target.value)}
-                  placeholder="あなたの回答を入力してください..."
-                  className="text-sm min-h-[80px] resize-none"
-                  data-testid="textarea-practice-answer"
-                />
-                <Button
-                  size="sm"
-                  className="mt-2 w-full"
-                  onClick={() => evaluateMutation.mutate()}
-                  disabled={evaluateMutation.isPending || !userAnswer.trim()}
-                  data-testid="button-submit-practice"
-                >
-                  {evaluateMutation.isPending ? (
-                    <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />
-                  ) : (
-                    <CheckCircle2 className="w-3.5 h-3.5 mr-1.5" />
-                  )}
-                  回答を送信
-                </Button>
               </div>
 
-              {evaluation && (
+              {practiceState === 'chatting' && !sendMessageMutation.isPending && (
+                <div className="flex gap-2 items-end">
+                  <Textarea
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                    placeholder="営業としての返答を入力..."
+                    className="text-sm min-h-[44px] max-h-[100px] resize-none flex-1"
+                    data-testid="textarea-practice-input"
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey && userInput.trim()) {
+                        e.preventDefault();
+                        sendMessageMutation.mutate(userInput.trim());
+                      }
+                    }}
+                  />
+                  <Button
+                    size="icon"
+                    onClick={() => {
+                      if (userInput.trim()) sendMessageMutation.mutate(userInput.trim());
+                    }}
+                    disabled={!userInput.trim()}
+                    data-testid="button-send-message"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              )}
+
+              {practiceState === 'evaluating' && (
+                <div className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  会話を分析中...
+                </div>
+              )}
+
+              {practiceState === 'done' && evaluation && (
                 <div className="space-y-4 border-t pt-4" data-testid="section-evaluation-result">
                   <div className="flex items-center gap-3">
                     <div className="flex gap-0.5">
@@ -423,13 +496,13 @@ function SkillCardDetail({
                     </ul>
                   </div>
 
-                  {evaluation.modelAnswer && (
+                  {evaluation.modelConversation && (
                     <div className="bg-blue-500/5 border border-blue-500/20 rounded-md p-3" data-testid="section-model-answer">
                       <div className="flex items-center gap-1.5 mb-2">
                         <MessageSquareQuote className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                        <p className="text-xs font-semibold text-blue-700 dark:text-blue-400">模範回答</p>
+                        <p className="text-xs font-semibold text-blue-700 dark:text-blue-400">模範会話例</p>
                       </div>
-                      <p className="text-sm text-muted-foreground leading-relaxed italic">{evaluation.modelAnswer}</p>
+                      <p className="text-sm text-muted-foreground leading-relaxed italic whitespace-pre-line">{evaluation.modelConversation}</p>
                     </div>
                   )}
                 </div>
