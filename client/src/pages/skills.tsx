@@ -69,7 +69,16 @@ function SkillCardDetail({
       return await res.json();
     },
     onSuccess: (data) => {
-      setPracticeExercise(data);
+      if (data && data.scenario) {
+        setPracticeExercise(data);
+      } else {
+        setPracticeExercise({
+          scenario: data?.scenario || "シナリオの取得に失敗しました。もう一度お試しください。",
+          question: data?.question || "このスキルをどのように活用しますか？",
+          hint: data?.hint || "",
+          idealPoints: data?.idealPoints || [],
+        });
+      }
       setUserAnswer("");
       setEvaluation(null);
       setShowHint(false);
