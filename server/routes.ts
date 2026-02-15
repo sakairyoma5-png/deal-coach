@@ -763,47 +763,71 @@ JSON形式で回答してください:
         return res.status(404).json({ message: "Skill card not found" });
       }
 
-      const prompt = `あなたは営業スキルの指導者です。以下の練習問題に対するユーザーの回答を評価してください。
+      const prompt = `以下の営業練習問題に対するユーザーの回答を詳しく評価してください。
 
-スキル: ${card.titleJa}
-スキルの説明: ${card.descriptionJa}
-良い例: ${card.goodExampleJa}
+対象スキル: ${card.titleJa}
+スキル説明: ${card.descriptionJa}
+お手本の営業トーク: ${card.goodExampleJa}
 
+【練習問題】
 シナリオ: ${scenario}
 質問: ${question}
-ユーザーの回答: ${userAnswer}
 
-以下のJSON形式で評価してください:
-{
-  "score": 1〜5の整数（5が最高）,
-  "feedback": "具体的なフィードバック（3-4文。良い点と改善点を含む）",
-  "improvedAnswer": "改善された模範回答の例（1-2文）"
-}`;
+【ユーザーの回答】
+${userAnswer}
+
+必ず以下のJSON形式のみで回答してください。キー名は英語のまま、値は日本語で書いてください:
+{"score": 3, "goodPoints": ["良かった点1", "良かった点2"], "improvements": ["改善すべき点1", "改善すべき点2"], "overallFeedback": "総合的な評価コメント（2-3文）", "modelAnswer": "この場面での模範的な営業トークの例（具体的な発言内容を3-4文で）"}
+
+評価基準:
+- score: 1（不十分）〜5（非常に優秀）の整数
+- goodPoints: ユーザーの回答で良かった具体的なポイント（最低1つ）
+- improvements: 具体的に何を改善すべきか（最低1つ）
+- overallFeedback: 全体的な評価とアドバイス
+- modelAnswer: このシナリオでの理想的な営業トークの具体例`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
         messages: [
-          { role: "system", content: "あなたは営業スキルの指導者です。必ずJSON形式のみで回答してください。" },
+          { role: "system", content: "あなたはベテランの営業マネージャーです。部下の営業トレーニングを担当しています。必ずJSON形式のみで回答してください。余計なテキストは含めないでください。" },
           { role: "user", content: prompt },
         ],
-        max_completion_tokens: 1024,
+        max_completion_tokens: 1500,
         response_format: { type: "json_object" },
       });
 
+      const rawEval = response.choices[0]?.message?.content || '{}';
+      console.log("Practice evaluation raw response:", rawEval.slice(0, 500));
+
       let evaluation;
       try {
-        const parsed = JSON.parse(response.choices[0]?.message?.content || '{}');
+        const parsed = JSON.parse(rawEval);
         const score = parseInt(parsed.score || parsed.スコア || parsed.rating || "3");
+        const goodPoints = Array.isArray(parsed.goodPoints) ? parsed.goodPoints
+          : Array.isArray(parsed.good_points) ? parsed.good_points
+          : Array.isArray(parsed.良かった点) ? parsed.良かった点
+          : [];
+        const improvements = Array.isArray(parsed.improvements) ? parsed.improvements
+          : Array.isArray(parsed.改善点) ? parsed.改善点
+          : Array.isArray(parsed.improvement_points) ? parsed.improvement_points
+          : [];
+
+        const rawModelAnswer = (parsed.modelAnswer || parsed.model_answer || parsed.模範回答 || parsed.improvedAnswer || parsed.improved_answer || "").trim();
+
         evaluation = {
           score: isNaN(score) ? 3 : Math.max(1, Math.min(5, score)),
-          feedback: parsed.feedback || parsed.フィードバック || parsed.評価 || "回答を評価しました。",
-          improvedAnswer: parsed.improvedAnswer || parsed.improved_answer || parsed.模範回答 || "",
+          goodPoints: goodPoints.length > 0 ? goodPoints : ["回答を提出した積極性が良いです。"],
+          improvements: improvements.length > 0 ? improvements : ["より具体的な発言例を含めるとさらに良くなります。"],
+          overallFeedback: (parsed.overallFeedback || parsed.overall_feedback || parsed.総合評価 || parsed.feedback || parsed.フィードバック || "").trim() || "回答を評価しました。練習を繰り返すことでスキルが向上します。",
+          modelAnswer: rawModelAnswer || card.goodExampleJa || `このシナリオでは「${card.titleJa}」のスキルを使い、お客様の課題に寄り添った具体的な提案を行うことが理想的です。`,
         };
       } catch {
         evaluation = {
           score: 3,
-          feedback: "評価の生成に失敗しました。もう一度お試しください。",
-          improvedAnswer: "",
+          goodPoints: ["回答を提出した積極性が評価できます。"],
+          improvements: ["より具体的な発言例を含めると、実践で使えるスキルが身につきます。"],
+          overallFeedback: "評価の生成に一部失敗しましたが、練習を続けることが大切です。",
+          modelAnswer: card.goodExampleJa || "",
         };
       }
 
