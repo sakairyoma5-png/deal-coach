@@ -56,7 +56,9 @@ export const roleplayScenarios = pgTable("roleplay_scenarios", {
 export const roleplaySessions = pgTable("roleplay_sessions", {
   id: serial("id").primaryKey(),
   userId: varchar("user_id").notNull(),
-  scenarioId: integer("scenario_id").notNull(),
+  scenarioId: integer("scenario_id"),
+  mode: text("mode").notNull().default("personality"),
+  config: jsonb("config"),
   messages: jsonb("messages").notNull().default([]),
   feedback: jsonb("feedback"),
   score: integer("score"),

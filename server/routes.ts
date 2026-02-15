@@ -49,28 +49,68 @@ export async function registerRoutes(
   app.post("/api/roleplay/start", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
-      const { scenarioId } = req.body;
+      const { mode, config } = req.body;
 
-      const scenario = await storage.getScenario(scenarioId);
-      if (!scenario) return res.status(404).json({ message: "Scenario not found" });
+      let systemMessage = "";
 
-      const systemMessage = `あなたは営業ロープレの顧客役です。以下の設定に基づいて、リアルな顧客として振る舞ってください。
+      if (mode === "personality") {
+        const personalityDescriptions: Record<string, string> = {
+          cautious: "慎重型：決断に時間がかかり、リスクを非常に気にする。データや実績を重視し、導入事例や保証を求める。急かされると不信感を持つ。",
+          decisive: "即決型：スピード感を重視し、要点を簡潔に聞きたい。メリットが明確なら即決するが、回りくどい説明には苛立つ。",
+          analytical: "分析型：論理的思考を好み、詳細なデータや比較資料を求める。感情的なアピールには響かず、ROIや具体的数値を重視する。",
+          friendly: "友好型：人間関係を大切にし、信頼関係の構築を重視する。フレンドリーだが、本音を言わないこともある。雑談を好む。",
+          skeptical: "懐疑型：営業に対して警戒心が強く、売り込みを嫌う。自分で調べた情報を持っており、矛盾点を突いてくる。",
+          busy: "多忙型：とにかく時間がない。要点だけを短く聞きたい。長い説明は途中で遮る。短時間で価値を伝えられないと興味を失う。",
+        };
 
-顧客情報:
-- 名前: ${scenario.customerName}
-- 役職: ${scenario.customerRole}
-- 会社: ${scenario.companyName}
-- 業界: ${scenario.industry}
-- 商品/サービス: ${scenario.productService}
-- 状況: ${scenario.situation}
-- 難易度: ${scenario.difficulty === 'easy' ? '初級（協力的な顧客）' : scenario.difficulty === 'medium' ? '中級（標準的な顧客）' : '上級（厳しい顧客）'}
+        const personalityType = config.personalityType || "cautious";
+        const product = config.product || "不明な商品";
+        const goal = config.goal || "商談成立";
+
+        systemMessage = `あなたは営業ロープレの顧客役です。以下の設定に基づいて、リアルな顧客として振る舞ってください。
+
+性格タイプ: ${personalityDescriptions[personalityType] || personalityDescriptions.cautious}
+
+営業担当が提案する商品/サービス: ${product}
+営業担当のゴール: ${goal}
 
 ルール:
 - 日本語で会話してください
-- 顧客としてリアルに反応してください
-- 難易度に応じて質問や反論をしてください
+- 設定された性格タイプに忠実に振る舞ってください
+- 顧客としてリアルに反応し、性格に応じた質問や反論をしてください
 - 最初の挨拶から始めてください
-- 簡潔に（2-3文程度で）応答してください`;
+- 簡潔に（2-3文程度で）応答してください
+- 顧客の名前は適当に設定してください（例：田中、佐藤、鈴木など）`;
+
+      } else if (mode === "custom") {
+        const myCompany = config.myCompany || "";
+        const theirCompany = config.theirCompany || "";
+        const relationship = config.relationship || "";
+        const phase = config.phase || "";
+        const product = config.product || "";
+        const additionalInfo = config.additionalInfo || "";
+
+        systemMessage = `あなたは営業ロープレの顧客役です。以下の詳細設定に基づいて、リアルな顧客として振る舞ってください。
+
+営業側の会社情報: ${myCompany}
+顧客側の会社情報: ${theirCompany}
+これまでの関係性: ${relationship}
+今回の商談フェーズ: ${phase}
+提案する商品/サービス: ${product}
+その他の情報: ${additionalInfo}
+
+ルール:
+- 日本語で会話してください
+- 上記の情報を総合的に判断し、適切な人格・態度・反応パターンを自分で決定してください
+- 商談フェーズに応じた適切な態度を取ってください（初期接触なら警戒、クロージングなら具体的条件の確認など）
+- 顧客としてリアルに反応してください
+- 最初の挨拶から始めてください
+- 簡潔に（2-3文程度で）応答してください
+- 顧客の名前・役職は設定から推測して自然に設定してください`;
+
+      } else {
+        return res.status(400).json({ message: "Invalid mode" });
+      }
 
       const initialResponse = await openai.chat.completions.create({
         model: "gpt-5-nano",
@@ -90,7 +130,8 @@ export async function registerRoutes(
 
       const session = await storage.createSession({
         userId,
-        scenarioId,
+        mode,
+        config,
         messages: messages,
       });
 
@@ -103,6 +144,47 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error starting roleplay:", error);
       res.status(500).json({ message: "Failed to start roleplay session" });
+    }
+  });
+
+  app.post("/api/roleplay/custom-prepare", isAuthenticated, async (req: any, res) => {
+    try {
+      const { config } = req.body;
+
+      const prompt = `以下の商談設定情報を確認し、ロープレを開始するにあたって不足している情報や確認したい点があれば、質問してください。十分な情報がある場合は「準備完了」と回答してください。
+
+営業側の会社情報: ${config.myCompany || "未入力"}
+顧客側の会社情報: ${config.theirCompany || "未入力"}
+これまでの関係性: ${config.relationship || "未入力"}
+今回の商談フェーズ: ${config.phase || "未入力"}
+提案する商品/サービス: ${config.product || "未入力"}
+その他の情報: ${config.additionalInfo || "未入力"}
+
+日本語で質問してください。質問は最大3つまでにし、JSON形式で回答してください:
+{
+  "ready": true/false,
+  "questions": ["質問1", "質問2"] // readyがfalseの場合のみ
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-5-nano",
+        messages: [{ role: "user", content: prompt }],
+        max_completion_tokens: 512,
+        response_format: { type: "json_object" },
+      });
+
+      const resultText = response.choices[0]?.message?.content || '{"ready": true, "questions": []}';
+      let result;
+      try {
+        result = JSON.parse(resultText);
+      } catch {
+        result = { ready: true, questions: [] };
+      }
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error in custom prepare:", error);
+      res.status(500).json({ message: "Failed to prepare custom roleplay" });
     }
   });
 
