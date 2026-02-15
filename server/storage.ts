@@ -1,5 +1,5 @@
 import {
-  subscriptions, skillCards, roleplayScenarios, roleplaySessions, skillDiagnoses, userProgress, userSkillProgress,
+  subscriptions, skillCards, roleplayScenarios, roleplaySessions, skillDiagnoses, userProgress, userSkillProgress, skillCardStudyLogs,
   type Subscription, type InsertSubscription,
   type SkillCard, type InsertSkillCard,
   type RoleplayScenario, type InsertRoleplayScenario,
@@ -7,9 +7,10 @@ import {
   type SkillDiagnosis, type InsertSkillDiagnosis,
   type UserProgress, type InsertUserProgress,
   type UserSkillProgress, type InsertUserSkillProgress,
+  type SkillCardStudyLog,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, sql, inArray } from "drizzle-orm";
+import { eq, desc, and, sql, inArray, gte } from "drizzle-orm";
 
 export interface IStorage {
   getSubscription(userId: string): Promise<Subscription | undefined>;
@@ -45,6 +46,11 @@ export interface IStorage {
 
   getSkillCardCount(): Promise<number>;
   getScenarioCount(): Promise<number>;
+
+  getTodayStudyLogs(userId: string): Promise<SkillCardStudyLog[]>;
+  getRecentStudyLogs(userId: string, days?: number): Promise<SkillCardStudyLog[]>;
+  createStudyLog(userId: string, skillCardId: number): Promise<SkillCardStudyLog>;
+  hasStudiedToday(userId: string, skillCardId: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -187,6 +193,46 @@ export class DatabaseStorage implements IStorage {
   async getScenarioCount(): Promise<number> {
     const result = await db.select({ count: sql<number>`count(*)` }).from(roleplayScenarios).where(sql`${roleplayScenarios.userId} IS NULL`);
     return Number(result[0]?.count || 0);
+  }
+
+  async getTodayStudyLogs(userId: string): Promise<SkillCardStudyLog[]> {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    return db.select().from(skillCardStudyLogs)
+      .where(and(
+        eq(skillCardStudyLogs.userId, userId),
+        gte(skillCardStudyLogs.studiedAt, todayStart),
+      ))
+      .orderBy(desc(skillCardStudyLogs.studiedAt));
+  }
+
+  async getRecentStudyLogs(userId: string, days = 30): Promise<SkillCardStudyLog[]> {
+    const since = new Date();
+    since.setDate(since.getDate() - days);
+    return db.select().from(skillCardStudyLogs)
+      .where(and(
+        eq(skillCardStudyLogs.userId, userId),
+        gte(skillCardStudyLogs.studiedAt, since),
+      ))
+      .orderBy(desc(skillCardStudyLogs.studiedAt));
+  }
+
+  async createStudyLog(userId: string, skillCardId: number): Promise<SkillCardStudyLog> {
+    const [log] = await db.insert(skillCardStudyLogs).values({ userId, skillCardId }).returning();
+    return log;
+  }
+
+  async hasStudiedToday(userId: string, skillCardId: number): Promise<boolean> {
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const [log] = await db.select().from(skillCardStudyLogs)
+      .where(and(
+        eq(skillCardStudyLogs.userId, userId),
+        eq(skillCardStudyLogs.skillCardId, skillCardId),
+        gte(skillCardStudyLogs.studiedAt, todayStart),
+      ))
+      .limit(1);
+    return !!log;
   }
 }
 

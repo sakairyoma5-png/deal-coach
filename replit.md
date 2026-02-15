@@ -57,9 +57,18 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 - `GET /api/diagnosis/latest` - Latest skill diagnosis
 - `GET /api/diagnosis/history` - Diagnosis history
 - `GET /api/progress/recent` - Recent activity
+- `GET /api/study-logs/today` - Today's skill card study logs for current user
+- `GET /api/study-logs/recent?days=N` - Recent study logs (default 30 days)
+- `POST /api/study-logs` - Record a skill card study (body: { skillCardId })
 
 ## Database Tables
-users, sessions (auth), subscriptions, skill_cards (with isAiGenerated, sourceSessionId), roleplay_scenarios, roleplay_sessions (with feedbackChatMessages), skill_diagnoses, user_progress, user_skill_progress, conversations, messages
+users, sessions (auth), subscriptions, skill_cards (with isAiGenerated, sourceSessionId), roleplay_scenarios, roleplay_sessions (with feedbackChatMessages), skill_diagnoses, user_progress, user_skill_progress, skill_card_study_logs, conversations, messages
+
+## Skill Card Study System
+- All plans: Study logs recorded when opening a skill card (tracks learning history)
+- Free plan: 1日3枚まで制限。カード選択時に確認ダイアログ表示。学習済みカードは再閲覧可能
+- Basic/Pro: 制限なし、確認ダイアログなし、学習記録は同様に蓄積
+- Roleplay AI evaluation includes recent study history (14 days) for contextualized feedback
 
 ## Dev Commands
 - `npm run dev` - Start dev server

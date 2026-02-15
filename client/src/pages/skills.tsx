@@ -11,6 +11,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   BookOpen,
   Zap,
   ArrowLeft,
@@ -34,8 +44,10 @@ import {
   TrendingUp,
   MessageSquareQuote,
 } from "lucide-react";
-import type { SkillCard, UserSkillProgress } from "@shared/schema";
-import { UpgradeBanner, FeatureLockedInline } from "@/components/upgrade-banner";
+import type { SkillCard, UserSkillProgress, SkillCardStudyLog } from "@shared/schema";
+import { UpgradeBanner } from "@/components/upgrade-banner";
+import { Crown } from "lucide-react";
+import { Link } from "wouter";
 
 function SkillCardDetail({
   card,
@@ -540,11 +552,14 @@ function SkillCardDetail({
 
 const CATEGORIES = ["すべて", "ヒアリング", "ラポール構築", "提案", "クロージング", "心理学", "交渉術"];
 
+const FREE_DAILY_LIMIT = 3;
+
 export default function SkillsPage() {
   const { user } = useAuth();
   const [selectedCard, setSelectedCard] = useState<SkillCard | null>(null);
   const [selectedCategory, setSelectedCategory] = useState("すべて");
   const [searchQuery, setSearchQuery] = useState("");
+  const [confirmCard, setConfirmCard] = useState<SkillCard | null>(null);
 
   const { data: skillCards, isLoading } = useQuery<SkillCard[]>({
     queryKey: ["/api/skill-cards"],
@@ -558,8 +573,56 @@ export default function SkillsPage() {
     queryKey: ["/api/skill-progress"],
   });
 
+  const { data: todayLogs } = useQuery<SkillCardStudyLog[]>({
+    queryKey: ["/api/study-logs/today"],
+  });
+
   const userPlan = subscription?.plan || "free";
   const completedIds = new Set((skillProgress || []).map((p) => p.skillCardId));
+  const todayStudiedIds = new Set((todayLogs || []).map((l) => l.skillCardId));
+  const todayCount = todayStudiedIds.size;
+  const isFree = userPlan === "free";
+  const isLimitReached = isFree && todayCount >= FREE_DAILY_LIMIT;
+
+  const studyLogMutation = useMutation({
+    mutationFn: async (skillCardId: number) => {
+      const res = await apiRequest("POST", "/api/study-logs", { skillCardId });
+      return await res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/study-logs/today"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/progress/recent"] });
+    },
+  });
+
+  const handleCardClick = (card: SkillCard) => {
+    const alreadyStudiedToday = todayStudiedIds.has(card.id);
+
+    if (alreadyStudiedToday) {
+      setSelectedCard(card);
+      return;
+    }
+
+    if (!isFree) {
+      studyLogMutation.mutate(card.id);
+      setSelectedCard(card);
+      return;
+    }
+
+    if (isLimitReached) {
+      setConfirmCard(card);
+      return;
+    }
+
+    setConfirmCard(card);
+  };
+
+  const handleConfirmStudy = () => {
+    if (!confirmCard) return;
+    studyLogMutation.mutate(confirmCard.id);
+    setSelectedCard(confirmCard);
+    setConfirmCard(null);
+  };
 
   if (selectedCard) {
     return (
@@ -568,7 +631,16 @@ export default function SkillsPage() {
         onBack={() => setSelectedCard(null)}
         isCompleted={completedIds.has(selectedCard.id)}
         allCards={skillCards || []}
-        onSelectCard={setSelectedCard}
+        onSelectCard={(card) => {
+          const alreadyStudied = todayStudiedIds.has(card.id);
+          if (alreadyStudied || !isFree) {
+            if (!alreadyStudied) studyLogMutation.mutate(card.id);
+            setSelectedCard(card);
+          } else if (!isLimitReached) {
+            setSelectedCard(null);
+            setConfirmCard(card);
+          }
+        }}
         userPlan={userPlan}
       />
     );
@@ -605,7 +677,7 @@ export default function SkillsPage() {
             <BookOpen className="w-5 h-5 text-primary" />
             <h1 className="font-bold text-base">スキルカード</h1>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             {totalCards > 0 && (
               <span className="text-xs text-muted-foreground" data-testid="text-progress-count">
                 {completedCount}/{totalCards} 履修済み
@@ -617,6 +689,28 @@ export default function SkillsPage() {
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-4 space-y-3">
+        {isFree && (
+          <div className={`flex items-center gap-2 px-3 py-2 rounded-md text-xs ${
+            isLimitReached
+              ? "bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400"
+              : "bg-primary/5 border border-primary/10 text-muted-foreground"
+          }`} data-testid="text-daily-study-count">
+            <BookOpen className="w-3.5 h-3.5 flex-shrink-0" />
+            <span>
+              本日の学習: <span className="font-semibold">{todayCount}/{FREE_DAILY_LIMIT}枚</span>
+              {isLimitReached && " （本日の上限に達しました）"}
+            </span>
+            {isLimitReached && (
+              <Link href="/pricing">
+                <Button size="sm" variant="outline" className="ml-auto text-[10px] h-6 px-2" data-testid="button-upgrade-daily-limit">
+                  <Crown className="w-3 h-3 mr-1" />
+                  無制限にする
+                </Button>
+              </Link>
+            )}
+          </div>
+        )}
+
         <div className="relative">
           <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input
@@ -653,13 +747,16 @@ export default function SkillsPage() {
         ) : filteredCards.length > 0 ? (
           <div className="space-y-3">
             <p className="text-xs text-muted-foreground">{filteredCards.length}件のカード</p>
-            {filteredCards.map((card, index) => {
+            {filteredCards.map((card) => {
               const isDone = completedIds.has(card.id);
+              const studiedToday = todayStudiedIds.has(card.id);
               return (
                 <Card
                   key={card.id}
-                  className="p-4 hover-elevate cursor-pointer"
-                  onClick={() => setSelectedCard(card)}
+                  className={`p-4 hover-elevate cursor-pointer ${
+                    isFree && isLimitReached && !studiedToday ? "opacity-60" : ""
+                  }`}
+                  onClick={() => handleCardClick(card)}
                   data-testid={`card-skill-${card.id}`}
                 >
                   <div className="flex items-start gap-3">
@@ -685,6 +782,11 @@ export default function SkillsPage() {
                             履修済み
                           </Badge>
                         )}
+                        {studiedToday && !isDone && (
+                          <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/30">
+                            本日学習済み
+                          </Badge>
+                        )}
                         {card.isAiGenerated && (
                           <Badge variant="outline" className="text-[10px] px-1.5 py-0">AI</Badge>
                         )}
@@ -707,6 +809,47 @@ export default function SkillsPage() {
         )}
       </main>
       <BottomNav />
+
+      <AlertDialog open={!!confirmCard} onOpenChange={(open) => { if (!open) setConfirmCard(null); }}>
+        <AlertDialogContent data-testid="dialog-study-confirm">
+          {confirmCard && (
+            isLimitReached ? (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>本日の学習上限に達しました</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    無料プランでは1日{FREE_DAILY_LIMIT}枚まで学習できます。本日学習したカードは引き続き閲覧可能です。
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel data-testid="button-dialog-cancel">閉じる</AlertDialogCancel>
+                  <Link href="/pricing">
+                    <AlertDialogAction data-testid="button-dialog-upgrade">
+                      <Crown className="w-3.5 h-3.5 mr-1.5" />
+                      プランをアップグレード
+                    </AlertDialogAction>
+                  </Link>
+                </AlertDialogFooter>
+              </>
+            ) : (
+              <>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>「{confirmCard.titleJa}」を学習しますか？</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    本日{todayCount + 1}枚目の学習です（無料プランは1日{FREE_DAILY_LIMIT}枚まで）
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel data-testid="button-dialog-cancel">いいえ</AlertDialogCancel>
+                  <AlertDialogAction onClick={handleConfirmStudy} data-testid="button-dialog-confirm">
+                    はい、学習する
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </>
+            )
+          )}
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
