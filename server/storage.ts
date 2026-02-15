@@ -16,6 +16,7 @@ export interface IStorage {
   upsertSubscription(data: InsertSubscription): Promise<Subscription>;
 
   getAllSkillCards(): Promise<SkillCard[]>;
+  getSkillCard(id: number): Promise<SkillCard | undefined>;
   createSkillCard(data: InsertSkillCard): Promise<SkillCard>;
 
   getScenarios(userId?: string): Promise<RoleplayScenario[]>;
@@ -39,6 +40,8 @@ export interface IStorage {
   getUserSkillProgress(userId: string): Promise<UserSkillProgress[]>;
   markSkillCompleted(userId: string, skillCardId: number): Promise<UserSkillProgress>;
   isSkillCompleted(userId: string, skillCardId: number): Promise<boolean>;
+
+  deleteAllSkillCards(): Promise<void>;
 
   getSkillCardCount(): Promise<number>;
   getScenarioCount(): Promise<number>;
@@ -64,6 +67,11 @@ export class DatabaseStorage implements IStorage {
 
   async getAllSkillCards(): Promise<SkillCard[]> {
     return db.select().from(skillCards);
+  }
+
+  async getSkillCard(id: number): Promise<SkillCard | undefined> {
+    const [card] = await db.select().from(skillCards).where(eq(skillCards.id, id));
+    return card;
   }
 
   async createSkillCard(data: InsertSkillCard): Promise<SkillCard> {
@@ -164,6 +172,11 @@ export class DatabaseStorage implements IStorage {
     const [p] = await db.select().from(userSkillProgress)
       .where(and(eq(userSkillProgress.userId, userId), eq(userSkillProgress.skillCardId, skillCardId)));
     return !!p;
+  }
+
+  async deleteAllSkillCards(): Promise<void> {
+    await db.delete(userSkillProgress);
+    await db.delete(skillCards);
   }
 
   async getSkillCardCount(): Promise<number> {

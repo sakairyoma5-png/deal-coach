@@ -13,10 +13,13 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 ## Key Features
 1. Landing page (unauthenticated) with 6 feature cards
 2. Dashboard with skill scores, AI-powered recommendations, activity
-3. Skill card learning (SPIN, Mirroring, etc.) with per-user completion tracking
+3. Enriched skill card learning (50 cards, 6 categories) with per-user completion tracking
+   - Rich content: whyEffective, mechanism, usageScenario, failurePatterns, checklist, successStory
+   - Category filtering and search
+   - AI practice exercises with evaluation
 4. AI roleplay with 2 modes: personality-type selection (6 types + 3 difficulty levels) and custom free-form with AI pre-questioning
 5. Post-roleplay feedback chat with AI coach (SSE streaming, follow-up questions)
-6. AI auto-generated skill cards from roleplay weaknesses (shared globally, deduped by titleJa)
+6. AI auto-generated skill cards from roleplay weaknesses (shared globally, deduped by titleJa, includes all enriched fields)
 7. Skill diagnosis (4-axis: listening, questioning, empathy, closing)
 8. Pricing page (3 tiers: Free, Basic, Pro) - UI only, no Stripe
 9. Mobile-first design with bottom navigation
@@ -27,7 +30,9 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 - `client/src/components/` - ThemeProvider, ThemeToggle, BottomNav, UI components
 - `server/routes.ts` - All API endpoints
 - `server/storage.ts` - DatabaseStorage with Drizzle
-- `server/seed.ts` - Seed data for skill cards and scenarios
+- `server/seed.ts` - Seed orchestrator
+- `server/seed-cards-1.ts` - Skill cards 1-25 seed data
+- `server/seed-cards-2.ts` - Skill cards 26-50 seed data
 - `shared/schema.ts` - All Drizzle schemas and types
 - `server/replit_integrations/auth/` - Replit Auth module
 
@@ -43,6 +48,8 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 - `POST /api/feedback/start` - Start feedback chat (analyzes session, auto-generates skill cards)
 - `POST /api/feedback/chat` - Follow-up feedback conversation (SSE streaming)
 - `POST /api/skill-cards/:id/complete` - Mark skill card as completed by user
+- `POST /api/skill-cards/:id/practice` - Generate AI practice exercise for a skill card
+- `POST /api/skill-cards/:id/practice/evaluate` - Evaluate user's practice answer with AI
 - `GET /api/skill-progress` - User's skill card completion progress
 - `GET /api/recommendations` - AI-powered skill card recommendations based on latest diagnosis
 - `GET /api/diagnosis/latest` - Latest skill diagnosis
