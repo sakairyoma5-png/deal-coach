@@ -1,12 +1,12 @@
-import { useAuth } from "@/hooks/use-auth";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { BottomNav } from "@/components/bottom-nav";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useRef, useEffect } from "react";
@@ -14,22 +14,52 @@ import {
   MessageSquare,
   ArrowLeft,
   Send,
-  Users,
-  Building2,
-  Briefcase,
-  ChevronRight,
   Loader2,
   Bot,
   User as UserIcon,
+  ShieldQuestion,
+  Clock,
+  BarChart3,
+  Smile,
+  Search,
+  Zap,
+  Pencil,
+  ChevronRight,
+  Sparkles,
 } from "lucide-react";
-import type { RoleplayScenario, RoleplaySession } from "@shared/schema";
 
 interface ChatMessage {
   role: "user" | "assistant" | "system";
   content: string;
 }
 
-function RoleplayChat({ scenario, onBack }: { scenario: RoleplayScenario; onBack: () => void }) {
+const personalityTypes = [
+  { id: "cautious", label: "慎重型", description: "リスクを重視し、データや実績を求める", icon: ShieldQuestion, color: "text-blue-500 bg-blue-500/10" },
+  { id: "decisive", label: "即決型", description: "スピード重視、要点を簡潔に聞きたい", icon: Zap, color: "text-amber-500 bg-amber-500/10" },
+  { id: "analytical", label: "分析型", description: "論理的、詳細なデータや比較を求める", icon: BarChart3, color: "text-emerald-500 bg-emerald-500/10" },
+  { id: "friendly", label: "友好型", description: "人間関係重視、信頼構築を大切にする", icon: Smile, color: "text-pink-500 bg-pink-500/10" },
+  { id: "skeptical", label: "懐疑型", description: "警戒心が強く、矛盾点を突いてくる", icon: Search, color: "text-red-500 bg-red-500/10" },
+  { id: "busy", label: "多忙型", description: "時間がない、要点だけを短く聞きたい", icon: Clock, color: "text-violet-500 bg-violet-500/10" },
+];
+
+const phaseOptions = [
+  "初期接触（テレアポ・初回訪問）",
+  "ヒアリング（課題把握）",
+  "提案（プレゼンテーション）",
+  "交渉（条件調整）",
+  "クロージング（契約締結）",
+  "フォローアップ（契約後フォロー）",
+];
+
+function RoleplayChat({
+  mode,
+  config,
+  onBack,
+}: {
+  mode: string;
+  config: any;
+  onBack: () => void;
+}) {
   const { toast } = useToast();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
@@ -39,7 +69,7 @@ function RoleplayChat({ scenario, onBack }: { scenario: RoleplayScenario; onBack
 
   const startMutation = useMutation({
     mutationFn: async () => {
-      const res = await apiRequest("POST", "/api/roleplay/start", { scenarioId: scenario.id });
+      const res = await apiRequest("POST", "/api/roleplay/start", { mode, config });
       return await res.json();
     },
     onSuccess: (data: { sessionId: number; messages: ChatMessage[] }) => {
@@ -64,6 +94,7 @@ function RoleplayChat({ scenario, onBack }: { scenario: RoleplayScenario; onBack
 
     const userMessage: ChatMessage = { role: "user", content: input.trim() };
     setMessages((prev) => [...prev, userMessage]);
+    const messageToSend = input.trim();
     setInput("");
     setIsStreaming(true);
 
@@ -72,7 +103,7 @@ function RoleplayChat({ scenario, onBack }: { scenario: RoleplayScenario; onBack
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ sessionId, message: input.trim() }),
+        body: JSON.stringify({ sessionId, message: messageToSend }),
       });
 
       if (!res.ok) throw new Error("Failed to send message");
@@ -132,6 +163,10 @@ function RoleplayChat({ scenario, onBack }: { scenario: RoleplayScenario; onBack
     },
   });
 
+  const headerTitle = mode === "personality"
+    ? `${personalityTypes.find((p) => p.id === config.personalityType)?.label || ""}との商談`
+    : "カスタム商談";
+
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
@@ -141,15 +176,15 @@ function RoleplayChat({ scenario, onBack }: { scenario: RoleplayScenario; onBack
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <div className="min-w-0">
-              <h1 className="font-semibold text-sm truncate">{scenario.titleJa}</h1>
-              <p className="text-[10px] text-muted-foreground truncate">{scenario.customerName} - {scenario.companyName}</p>
+              <h1 className="font-semibold text-sm truncate">{headerTitle}</h1>
+              <p className="text-[10px] text-muted-foreground truncate">{config.product || ""}</p>
             </div>
           </div>
           <Button
             variant="outline"
             size="sm"
             onClick={() => endSessionMutation.mutate()}
-            disabled={endSessionMutation.isPending || messages.length < 4}
+            disabled={endSessionMutation.isPending || messages.filter(m => m.role !== "system").length < 4}
             data-testid="button-end-session"
           >
             {endSessionMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "終了"}
@@ -159,8 +194,9 @@ function RoleplayChat({ scenario, onBack }: { scenario: RoleplayScenario; onBack
 
       <div className="flex-1 overflow-y-auto max-w-lg mx-auto w-full px-4 py-4 space-y-3">
         {startMutation.isPending ? (
-          <div className="flex items-center justify-center py-12">
+          <div className="flex flex-col items-center justify-center py-12 gap-3">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            <p className="text-sm text-muted-foreground">商談相手を準備中...</p>
           </div>
         ) : (
           <>
@@ -228,27 +264,368 @@ function RoleplayChat({ scenario, onBack }: { scenario: RoleplayScenario; onBack
   );
 }
 
-export default function RoleplayPage() {
-  const [selectedScenario, setSelectedScenario] = useState<RoleplayScenario | null>(null);
+function PersonalityModeForm({ onStart, onBack }: { onStart: (config: any) => void; onBack: () => void }) {
+  const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [product, setProduct] = useState("");
+  const [goal, setGoal] = useState("");
 
-  const { data: scenarios, isLoading } = useQuery<RoleplayScenario[]>({
-    queryKey: ["/api/scenarios"],
+  const canStart = selectedType && product.trim();
+
+  return (
+    <div className="min-h-screen bg-background pb-20">
+      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
+        <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Button size="icon" variant="ghost" onClick={onBack} data-testid="button-back-personality">
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+            <h1 className="font-bold text-base">性格タイプ選択</h1>
+          </div>
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <main className="max-w-lg mx-auto px-4 py-5 space-y-5">
+        <div>
+          <label className="text-sm font-medium mb-2 block">顧客の性格タイプ</label>
+          <div className="grid grid-cols-2 gap-2">
+            {personalityTypes.map((type) => {
+              const Icon = type.icon;
+              const isSelected = selectedType === type.id;
+              return (
+                <Card
+                  key={type.id}
+                  className={`p-3 cursor-pointer transition-all ${
+                    isSelected ? "ring-2 ring-primary" : "hover-elevate"
+                  }`}
+                  onClick={() => setSelectedType(type.id)}
+                  data-testid={`card-personality-${type.id}`}
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <div className={`w-7 h-7 rounded-md flex items-center justify-center ${type.color}`}>
+                      <Icon className="w-3.5 h-3.5" />
+                    </div>
+                    <span className="font-semibold text-sm">{type.label}</span>
+                  </div>
+                  <p className="text-[11px] text-muted-foreground leading-tight">{type.description}</p>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium mb-1.5 block" htmlFor="product-input">
+            提案する商品/サービス <span className="text-destructive">*</span>
+          </label>
+          <Input
+            id="product-input"
+            value={product}
+            onChange={(e) => setProduct(e.target.value)}
+            placeholder="例: クラウド型業務管理SaaS"
+            data-testid="input-product"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium mb-1.5 block" htmlFor="goal-input">
+            商談のゴール
+          </label>
+          <Input
+            id="goal-input"
+            value={goal}
+            onChange={(e) => setGoal(e.target.value)}
+            placeholder="例: 次回デモのアポイント獲得"
+            data-testid="input-goal"
+          />
+        </div>
+
+        <Button
+          className="w-full"
+          disabled={!canStart}
+          onClick={() =>
+            onStart({
+              personalityType: selectedType,
+              product: product.trim(),
+              goal: goal.trim() || "商談を成功させる",
+            })
+          }
+          data-testid="button-start-personality"
+        >
+          <MessageSquare className="w-4 h-4 mr-2" />
+          商談を開始する
+        </Button>
+      </main>
+      <BottomNav />
+    </div>
+  );
+}
+
+function CustomModeForm({ onStart, onBack }: { onStart: (config: any) => void; onBack: () => void }) {
+  const { toast } = useToast();
+  const [myCompany, setMyCompany] = useState("");
+  const [theirCompany, setTheirCompany] = useState("");
+  const [relationship, setRelationship] = useState("");
+  const [phase, setPhase] = useState("");
+  const [product, setProduct] = useState("");
+  const [additionalInfo, setAdditionalInfo] = useState("");
+  const [aiQuestions, setAiQuestions] = useState<string[]>([]);
+  const [aiAnswers, setAiAnswers] = useState<string[]>([]);
+  const [showQuestions, setShowQuestions] = useState(false);
+
+  const prepareMutation = useMutation({
+    mutationFn: async (config: any) => {
+      const res = await apiRequest("POST", "/api/roleplay/custom-prepare", { config });
+      return await res.json();
+    },
+    onSuccess: (data: { ready: boolean; questions?: string[] }) => {
+      if (data.ready || !data.questions?.length) {
+        onStart(buildConfig());
+      } else {
+        setAiQuestions(data.questions);
+        setAiAnswers(new Array(data.questions.length).fill(""));
+        setShowQuestions(true);
+      }
+    },
+    onError: () => {
+      toast({ title: "エラー", description: "準備に失敗しました", variant: "destructive" });
+    },
   });
 
-  const difficultyColors: Record<string, string> = {
-    easy: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400",
-    medium: "bg-amber-500/10 text-amber-600 dark:text-amber-400",
-    hard: "bg-red-500/10 text-red-600 dark:text-red-400",
+  const buildConfig = () => ({
+    myCompany: myCompany.trim(),
+    theirCompany: theirCompany.trim(),
+    relationship: relationship.trim(),
+    phase,
+    product: product.trim(),
+    additionalInfo: additionalInfo.trim() + (aiAnswers.length > 0 ? "\n\n追加情報:\n" + aiQuestions.map((q, i) => `Q: ${q}\nA: ${aiAnswers[i]}`).join("\n") : ""),
+  });
+
+  const canPrepare = myCompany.trim() && theirCompany.trim() && product.trim();
+
+  if (showQuestions && aiQuestions.length > 0) {
+    return (
+      <div className="min-h-screen bg-background pb-20">
+        <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
+          <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <Button size="icon" variant="ghost" onClick={() => setShowQuestions(false)} data-testid="button-back-questions">
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+              <h1 className="font-bold text-base">AIからの確認</h1>
+            </div>
+            <ThemeToggle />
+          </div>
+        </header>
+
+        <main className="max-w-lg mx-auto px-4 py-5 space-y-4">
+          <div className="flex items-start gap-2 p-3 bg-primary/5 rounded-md">
+            <Sparkles className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
+            <p className="text-sm text-muted-foreground">
+              よりリアルなロープレのために、以下の点を教えてください。スキップも可能です。
+            </p>
+          </div>
+
+          {aiQuestions.map((question, i) => (
+            <div key={i}>
+              <label className="text-sm font-medium mb-1.5 block">{question}</label>
+              <Textarea
+                value={aiAnswers[i]}
+                onChange={(e) => {
+                  const newAnswers = [...aiAnswers];
+                  newAnswers[i] = e.target.value;
+                  setAiAnswers(newAnswers);
+                }}
+                placeholder="回答を入力..."
+                className="resize-none text-sm"
+                rows={2}
+                data-testid={`input-ai-answer-${i}`}
+              />
+            </div>
+          ))}
+
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => onStart(buildConfig())}
+              data-testid="button-skip-questions"
+            >
+              スキップして開始
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={() => onStart(buildConfig())}
+              data-testid="button-start-with-answers"
+            >
+              回答して開始
+            </Button>
+          </div>
+        </main>
+        <BottomNav />
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-background pb-20">
+      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
+        <div className="max-w-lg mx-auto px-4 h-14 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-2">
+            <Button size="icon" variant="ghost" onClick={onBack} data-testid="button-back-custom">
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+            <h1 className="font-bold text-base">自由設定</h1>
+          </div>
+          <ThemeToggle />
+        </div>
+      </header>
+
+      <main className="max-w-lg mx-auto px-4 py-5 space-y-4">
+        <div>
+          <label className="text-sm font-medium mb-1.5 block">
+            自社の情報 <span className="text-destructive">*</span>
+          </label>
+          <Textarea
+            value={myCompany}
+            onChange={(e) => setMyCompany(e.target.value)}
+            placeholder="例: ITソリューション企業。従業員50名。クラウドサービスの開発・販売を主力事業としている。"
+            className="resize-none text-sm"
+            rows={2}
+            data-testid="input-my-company"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium mb-1.5 block">
+            相手の会社情報 <span className="text-destructive">*</span>
+          </label>
+          <Textarea
+            value={theirCompany}
+            onChange={(e) => setTheirCompany(e.target.value)}
+            placeholder="例: 製造業の大手企業。従業員2000名。工場のDX化を推進中。"
+            className="resize-none text-sm"
+            rows={2}
+            data-testid="input-their-company"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium mb-1.5 block">これまでの関係性</label>
+          <Textarea
+            value={relationship}
+            onChange={(e) => setRelationship(e.target.value)}
+            placeholder="例: 展示会で名刺交換済み。1回だけオンラインで30分のヒアリングを実施。"
+            className="resize-none text-sm"
+            rows={2}
+            data-testid="input-relationship"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium mb-1.5 block">商談フェーズ</label>
+          <div className="flex flex-wrap gap-1.5">
+            {phaseOptions.map((p) => (
+              <Badge
+                key={p}
+                variant={phase === p ? "default" : "outline"}
+                className={`cursor-pointer text-xs ${phase === p ? "" : "no-default-active-elevate"}`}
+                onClick={() => setPhase(phase === p ? "" : p)}
+                data-testid={`badge-phase-${p}`}
+              >
+                {p}
+              </Badge>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <label className="text-sm font-medium mb-1.5 block">
+            提案する商品/サービス <span className="text-destructive">*</span>
+          </label>
+          <Input
+            value={product}
+            onChange={(e) => setProduct(e.target.value)}
+            placeholder="例: 工場向けIoTモニタリングシステム"
+            data-testid="input-custom-product"
+          />
+        </div>
+
+        <div>
+          <label className="text-sm font-medium mb-1.5 block">その他の情報</label>
+          <Textarea
+            value={additionalInfo}
+            onChange={(e) => setAdditionalInfo(e.target.value)}
+            placeholder="例: 競合にA社がいる。先方のIT部長は技術に詳しい。予算は年間1000万円程度。"
+            className="resize-none text-sm"
+            rows={2}
+            data-testid="input-additional-info"
+          />
+        </div>
+
+        <Button
+          className="w-full"
+          disabled={!canPrepare || prepareMutation.isPending}
+          onClick={() => prepareMutation.mutate(buildConfig())}
+          data-testid="button-prepare-custom"
+        >
+          {prepareMutation.isPending ? (
+            <>
+              <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+              AIが確認中...
+            </>
+          ) : (
+            <>
+              <Sparkles className="w-4 h-4 mr-2" />
+              AIに確認して開始
+            </>
+          )}
+        </Button>
+      </main>
+      <BottomNav />
+    </div>
+  );
+}
+
+type RoleplayView = "select" | "personality" | "custom" | "chat";
+
+export default function RoleplayPage() {
+  const [view, setView] = useState<RoleplayView>("select");
+  const [chatMode, setChatMode] = useState<string>("");
+  const [chatConfig, setChatConfig] = useState<any>(null);
+
+  const handleStartChat = (mode: string, config: any) => {
+    setChatMode(mode);
+    setChatConfig(config);
+    setView("chat");
   };
 
-  const difficultyLabels: Record<string, string> = {
-    easy: "初級",
-    medium: "中級",
-    hard: "上級",
-  };
+  if (view === "chat" && chatConfig) {
+    return (
+      <RoleplayChat
+        mode={chatMode}
+        config={chatConfig}
+        onBack={() => setView("select")}
+      />
+    );
+  }
 
-  if (selectedScenario) {
-    return <RoleplayChat scenario={selectedScenario} onBack={() => setSelectedScenario(null)} />;
+  if (view === "personality") {
+    return (
+      <PersonalityModeForm
+        onStart={(config) => handleStartChat("personality", config)}
+        onBack={() => setView("select")}
+      />
+    );
+  }
+
+  if (view === "custom") {
+    return (
+      <CustomModeForm
+        onStart={(config) => handleStartChat("custom", config)}
+        onBack={() => setView("select")}
+      />
+    );
   }
 
   return (
@@ -263,58 +640,55 @@ export default function RoleplayPage() {
         </div>
       </header>
 
-      <main className="max-w-lg mx-auto px-4 py-5 space-y-3">
-        <p className="text-sm text-muted-foreground mb-2">
-          シナリオを選んで、AIとの模擬商談を始めましょう
+      <main className="max-w-lg mx-auto px-4 py-5 space-y-4">
+        <p className="text-sm text-muted-foreground">
+          練習モードを選んで、AIとの模擬商談を始めましょう
         </p>
 
-        {isLoading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map((i) => (
-              <Skeleton key={i} className="h-28 w-full rounded-md" />
-            ))}
-          </div>
-        ) : scenarios && scenarios.length > 0 ? (
-          scenarios.map((scenario) => (
-            <Card
-              key={scenario.id}
-              className="p-4 hover-elevate cursor-pointer"
-              onClick={() => setSelectedScenario(scenario)}
-              data-testid={`card-scenario-${scenario.id}`}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-2 flex-wrap">
-                    <h3 className="font-semibold text-sm">{scenario.titleJa}</h3>
-                    <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${difficultyColors[scenario.difficulty] || ""}`}>
-                      {difficultyLabels[scenario.difficulty] || scenario.difficulty}
-                    </Badge>
-                  </div>
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Users className="w-3 h-3" />
-                      <span>{scenario.customerName} ({scenario.customerRole})</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Building2 className="w-3 h-3" />
-                      <span>{scenario.companyName} - {scenario.industry}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <Briefcase className="w-3 h-3" />
-                      <span>{scenario.productService}</span>
-                    </div>
-                  </div>
+        <Card
+          className="p-5 hover-elevate cursor-pointer"
+          onClick={() => setView("personality")}
+          data-testid="card-mode-personality"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-9 h-9 rounded-md bg-primary/10 flex items-center justify-center">
+                  <ShieldQuestion className="w-5 h-5 text-primary" />
                 </div>
-                <ChevronRight className="w-4 h-4 text-muted-foreground flex-shrink-0 mt-1" />
+                <div>
+                  <h3 className="font-semibold text-base">性格タイプ選択</h3>
+                  <Badge variant="secondary" className="text-[10px] mt-0.5">おすすめ</Badge>
+                </div>
               </div>
-            </Card>
-          ))
-        ) : (
-          <div className="text-center py-12">
-            <MessageSquare className="w-10 h-10 text-muted-foreground mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">シナリオがまだありません</p>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                慎重型・即決型・分析型など、よくある顧客の性格タイプを選択。自分の商材とゴールを入力して、すぐに練習を開始できます。
+              </p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-2" />
           </div>
-        )}
+        </Card>
+
+        <Card
+          className="p-5 hover-elevate cursor-pointer"
+          onClick={() => setView("custom")}
+          data-testid="card-mode-custom"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-9 h-9 rounded-md bg-violet-500/10 flex items-center justify-center">
+                  <Pencil className="w-5 h-5 text-violet-500" />
+                </div>
+                <h3 className="font-semibold text-base">自由設定</h3>
+              </div>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                自社と相手の会社情報、過去の関係性、商談フェーズなどを詳細に設定。AIが情報を分析し、最適な顧客人格を自動生成します。
+              </p>
+            </div>
+            <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-2" />
+          </div>
+        </Card>
       </main>
       <BottomNav />
     </div>
