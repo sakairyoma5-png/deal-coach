@@ -14,7 +14,7 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 1. Landing page (unauthenticated) with 6 feature cards
 2. Dashboard with skill scores, recommendations, activity
 3. Skill card learning (SPIN, Mirroring, etc.)
-4. AI roleplay with streaming chat
+4. AI roleplay with 2 modes: personality-type selection (6 types) and custom free-form with AI pre-questioning
 5. Skill diagnosis (4-axis: listening, questioning, empathy, closing)
 6. Pricing page (3 tiers: Free, Basic, Pro)
 7. Mobile-first design with bottom navigation
@@ -34,8 +34,9 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 - `GET /api/auth/user` - Current user
 - `GET /api/subscription` - User subscription
 - `GET /api/skill-cards` - All skill cards
-- `GET /api/scenarios` - Roleplay scenarios
-- `POST /api/roleplay/start` - Start roleplay session
+- `GET /api/scenarios` - Roleplay scenarios (legacy)
+- `POST /api/roleplay/start` - Start roleplay session (accepts mode: personality|custom + config)
+- `POST /api/roleplay/custom-prepare` - AI pre-questioning for custom mode
 - `POST /api/roleplay/message` - Send message (SSE streaming)
 - `POST /api/roleplay/end` - End session, get diagnosis
 - `GET /api/diagnosis/latest` - Latest skill diagnosis
