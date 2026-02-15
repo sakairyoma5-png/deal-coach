@@ -31,6 +31,9 @@ import {
   Link2,
   Filter,
   Search,
+  ThumbsUp,
+  TrendingUp,
+  MessageSquareQuote,
 } from "lucide-react";
 import type { SkillCard, UserSkillProgress } from "@shared/schema";
 
@@ -58,8 +61,10 @@ function SkillCardDetail({
   const [userAnswer, setUserAnswer] = useState("");
   const [evaluation, setEvaluation] = useState<{
     score: number;
-    feedback: string;
-    improvedAnswer: string;
+    goodPoints: string[];
+    improvements: string[];
+    overallFeedback: string;
+    modelAnswer: string;
   } | null>(null);
   const [showHint, setShowHint] = useState(false);
 
@@ -98,7 +103,13 @@ function SkillCardDetail({
       return await res.json();
     },
     onSuccess: (data) => {
-      setEvaluation(data);
+      setEvaluation({
+        score: typeof data?.score === 'number' ? Math.max(1, Math.min(5, data.score)) : 3,
+        goodPoints: Array.isArray(data?.goodPoints) && data.goodPoints.length > 0 ? data.goodPoints : ["回答を提出した積極性が良いです。"],
+        improvements: Array.isArray(data?.improvements) && data.improvements.length > 0 ? data.improvements : ["より具体的な発言例を含めるとさらに良くなります。"],
+        overallFeedback: data?.overallFeedback || "回答を評価しました。練習を繰り返すことでスキルが向上します。",
+        modelAnswer: data?.modelAnswer || card.goodExampleJa || `このスキル「${card.titleJa}」を活用した具体的な営業トークを意識して練習しましょう。`,
+      });
     },
     onError: () => {
       toast({ title: "エラー", description: "評価の生成に失敗しました", variant: "destructive" });
@@ -365,25 +376,60 @@ function SkillCardDetail({
               </div>
 
               {evaluation && (
-                <div className="space-y-3 border-t pt-3">
-                  <div className="flex items-center gap-2">
+                <div className="space-y-4 border-t pt-4" data-testid="section-evaluation-result">
+                  <div className="flex items-center gap-3">
                     <div className="flex gap-0.5">
                       {[1, 2, 3, 4, 5].map((s) => (
                         <Star
                           key={s}
-                          className={`w-4 h-4 ${s <= evaluation.score ? "text-amber-500 fill-amber-500" : "text-muted-foreground/30"}`}
+                          className={`w-5 h-5 ${s <= evaluation.score ? "text-amber-500 fill-amber-500" : "text-muted-foreground/30"}`}
                         />
                       ))}
                     </div>
-                    <span className="text-sm font-medium">{evaluation.score}/5</span>
+                    <span className="text-base font-semibold" data-testid="text-evaluation-score">{evaluation.score}/5</span>
                   </div>
-                  <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-practice-feedback">
-                    {evaluation.feedback}
+
+                  <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-overall-feedback">
+                    {evaluation.overallFeedback}
                   </p>
-                  {evaluation.improvedAnswer && (
-                    <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-md p-3">
-                      <p className="text-xs font-medium text-emerald-700 dark:text-emerald-400 mb-1">模範回答</p>
-                      <p className="text-sm text-muted-foreground leading-relaxed">{evaluation.improvedAnswer}</p>
+
+                  <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-md p-3" data-testid="section-good-points">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <ThumbsUp className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">良かった点</p>
+                    </div>
+                    <ul className="space-y-1">
+                      {evaluation.goodPoints.map((point, i) => (
+                        <li key={i} className="text-sm text-muted-foreground leading-relaxed flex items-start gap-1.5">
+                          <span className="text-emerald-500 mt-0.5 shrink-0">+</span>
+                          <span>{point}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  <div className="bg-amber-500/5 border border-amber-500/20 rounded-md p-3" data-testid="section-improvements">
+                    <div className="flex items-center gap-1.5 mb-2">
+                      <TrendingUp className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">改善ポイント</p>
+                    </div>
+                    <ul className="space-y-1">
+                      {evaluation.improvements.map((point, i) => (
+                        <li key={i} className="text-sm text-muted-foreground leading-relaxed flex items-start gap-1.5">
+                          <span className="text-amber-500 mt-0.5 shrink-0">-</span>
+                          <span>{point}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+
+                  {evaluation.modelAnswer && (
+                    <div className="bg-blue-500/5 border border-blue-500/20 rounded-md p-3" data-testid="section-model-answer">
+                      <div className="flex items-center gap-1.5 mb-2">
+                        <MessageSquareQuote className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+                        <p className="text-xs font-semibold text-blue-700 dark:text-blue-400">模範回答</p>
+                      </div>
+                      <p className="text-sm text-muted-foreground leading-relaxed italic">{evaluation.modelAnswer}</p>
                     </div>
                   )}
                 </div>
