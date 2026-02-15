@@ -386,6 +386,274 @@ ${conversationText}
     }
   });
 
+  app.post("/api/feedback/start", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { sessionId } = req.body;
+
+      const session = await storage.getSession(sessionId);
+      if (!session) return res.status(404).json({ message: "Session not found" });
+      if (session.userId !== userId) return res.status(403).json({ message: "Forbidden" });
+      if (!session.feedback) return res.status(400).json({ message: "Session not completed" });
+
+      const feedback = session.feedback as any;
+      const msgs = session.messages as any[];
+      const conversationText = msgs
+        .filter((m: any) => m.role !== "system")
+        .map((m: any) => `${m.role === "user" ? "営業担当" : "顧客"}: ${m.content}`)
+        .join("\n");
+
+      const systemPrompt = `あなたは営業トレーニングのAIコーチです。以下のロープレの会話と評価結果を踏まえ、ユーザーと対話形式でフィードバックを行ってください。
+
+会話内容:
+${conversationText}
+
+評価結果:
+- 傾聴力: ${feedback.listening}/100
+- 質問力: ${feedback.questioning}/100
+- 共感力: ${feedback.empathy}/100
+- クロージング力: ${feedback.closing}/100
+- 総合スコア: ${feedback.overallScore}/100
+- 強み: ${(feedback.strengths || []).join("、")}
+- 改善点: ${(feedback.weaknesses || []).join("、")}
+
+ルール:
+- 日本語で会話してください
+- 最初のメッセージでは、全体の評価サマリーと具体的な改善ポイントを2-3個挙げてください
+- ユーザーの質問に対して、具体的なアドバイスや営業テクニックを教えてください
+- 関連する営業スキルの概念（例：FOMO、アンカリング、SPIN営業法、ミラーリングなど）を積極的に紹介してください
+- 簡潔に（3-5文程度で）応答してください`;
+
+      const initialAnalysis = await openai.chat.completions.create({
+        model: "gpt-5-nano",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: "今のロープレの結果を振り返ってください。" },
+        ],
+        max_completion_tokens: 1024,
+      });
+
+      const coachMessage = initialAnalysis.choices[0]?.message?.content || "フィードバックの生成に失敗しました。";
+
+      const skillCardAnalysisPrompt = `以下の営業ロープレの改善点を踏まえ、学習すべき営業スキルや心理学的概念を2-3個提案してください。
+
+改善点: ${(feedback.weaknesses || []).join("、")}
+会話概要: ${conversationText.slice(0, 500)}
+
+以下のJSON形式で回答してください:
+{
+  "skills": [
+    {
+      "titleJa": "スキル名（日本語）",
+      "title": "Skill Name (English)",
+      "category": "カテゴリ（ヒアリング/ラポール構築/提案/クロージング/心理学/交渉術のいずれか）",
+      "descriptionJa": "このスキルの説明（2-3文）",
+      "description": "Description in English",
+      "goodExampleJa": "良い例（具体的な会話例）",
+      "goodExample": "Good example in English",
+      "badExampleJa": "悪い例（具体的な会話例）",
+      "badExample": "Bad example in English",
+      "tipsJa": ["コツ1", "コツ2", "コツ3"],
+      "tips": ["Tip 1", "Tip 2", "Tip 3"],
+      "difficulty": "beginner/intermediate/advanced"
+    }
+  ]
+}`;
+
+      const skillAnalysis = await openai.chat.completions.create({
+        model: "gpt-5-nano",
+        messages: [{ role: "user", content: skillCardAnalysisPrompt }],
+        max_completion_tokens: 2048,
+        response_format: { type: "json_object" },
+      });
+
+      let generatedCards: any[] = [];
+      try {
+        const skillResult = JSON.parse(skillAnalysis.choices[0]?.message?.content || '{"skills":[]}');
+        const skills = skillResult.skills || [];
+
+        for (const skill of skills) {
+          const existing = await storage.getSkillCardByTitleJa(skill.titleJa);
+          if (!existing) {
+            const card = await storage.createSkillCard({
+              title: skill.title || skill.titleJa,
+              titleJa: skill.titleJa,
+              category: skill.category || "その他",
+              description: skill.description || skill.descriptionJa,
+              descriptionJa: skill.descriptionJa,
+              goodExample: skill.goodExample || skill.goodExampleJa,
+              goodExampleJa: skill.goodExampleJa,
+              badExample: skill.badExample || skill.badExampleJa,
+              badExampleJa: skill.badExampleJa,
+              tips: skill.tips || skill.tipsJa || [],
+              tipsJa: skill.tipsJa || [],
+              difficulty: skill.difficulty || "intermediate",
+              iconName: "Sparkles",
+              isPremium: false,
+              isAiGenerated: true,
+              sourceSessionId: sessionId,
+            });
+            generatedCards.push(card);
+          } else {
+            generatedCards.push(existing);
+          }
+        }
+      } catch (e) {
+        console.error("Error generating skill cards:", e);
+      }
+
+      const feedbackChatMessages = [
+        { role: "system", content: systemPrompt },
+        { role: "assistant", content: coachMessage },
+      ];
+
+      await storage.updateSession(sessionId, { feedbackChatMessages });
+
+      res.json({
+        message: coachMessage,
+        generatedCards,
+        diagnosis: feedback,
+      });
+    } catch (error) {
+      console.error("Error starting feedback:", error);
+      res.status(500).json({ message: "Failed to start feedback" });
+    }
+  });
+
+  app.post("/api/feedback/chat", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { sessionId, message } = req.body;
+
+      const session = await storage.getSession(sessionId);
+      if (!session) return res.status(404).json({ message: "Session not found" });
+      if (session.userId !== userId) return res.status(403).json({ message: "Forbidden" });
+
+      const chatMessages = (session.feedbackChatMessages as any[]) || [];
+      chatMessages.push({ role: "user", content: message });
+
+      res.setHeader("Content-Type", "text/event-stream");
+      res.setHeader("Cache-Control", "no-cache");
+      res.setHeader("Connection", "keep-alive");
+
+      const stream = await openai.chat.completions.create({
+        model: "gpt-5-nano",
+        messages: chatMessages,
+        stream: true,
+        max_completion_tokens: 1024,
+      });
+
+      let fullResponse = "";
+
+      for await (const chunk of stream) {
+        const content = chunk.choices[0]?.delta?.content || "";
+        if (content) {
+          fullResponse += content;
+          res.write(`data: ${JSON.stringify({ content })}\n\n`);
+        }
+      }
+
+      chatMessages.push({ role: "assistant", content: fullResponse });
+      await storage.updateSession(sessionId, { feedbackChatMessages: chatMessages });
+
+      res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+      res.end();
+    } catch (error) {
+      console.error("Error in feedback chat:", error);
+      if (res.headersSent) {
+        res.write(`data: ${JSON.stringify({ error: "Failed" })}\n\n`);
+        res.end();
+      } else {
+        res.status(500).json({ message: "Failed to process feedback message" });
+      }
+    }
+  });
+
+  app.post("/api/skill-cards/:id/complete", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const skillCardId = parseInt(req.params.id);
+      const progress = await storage.markSkillCompleted(userId, skillCardId);
+
+      await storage.createProgress({
+        userId,
+        skillCardId,
+        activityType: "skill_card",
+      });
+
+      res.json(progress);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to mark skill as completed" });
+    }
+  });
+
+  app.get("/api/skill-progress", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const progress = await storage.getUserSkillProgress(userId);
+      res.json(progress);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch skill progress" });
+    }
+  });
+
+  app.get("/api/recommendations", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const latestDiagnosis = await storage.getLatestDiagnosis(userId);
+      if (!latestDiagnosis) {
+        return res.json({ cards: [], reason: "まだ診断結果がありません。ロープレを試してみましょう。" });
+      }
+
+      const allCards = await storage.getAllSkillCards();
+      const weaknesses = latestDiagnosis.weaknesses || [];
+      const feedbackJa = latestDiagnosis.feedbackJa || "";
+
+      const prompt = `以下の営業スキル診断結果と、利用可能なスキルカード一覧から、このユーザーに最も関連性の高いスキルカードを最大5つ選んでください。
+
+診断結果:
+- 傾聴力: ${latestDiagnosis.listening}/100
+- 質問力: ${latestDiagnosis.questioning}/100
+- 共感力: ${latestDiagnosis.empathy}/100
+- クロージング力: ${latestDiagnosis.closing}/100
+- 改善点: ${weaknesses.join("、")}
+- フィードバック: ${feedbackJa}
+
+利用可能なスキルカード:
+${allCards.map(c => `ID:${c.id} - ${c.titleJa}（${c.category}）`).join("\n")}
+
+JSON形式で回答してください:
+{
+  "cardIds": [1, 2, 3],
+  "reason": "おすすめの理由（日本語1-2文）"
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-5-nano",
+        messages: [{ role: "user", content: prompt }],
+        max_completion_tokens: 512,
+        response_format: { type: "json_object" },
+      });
+
+      let result;
+      try {
+        result = JSON.parse(response.choices[0]?.message?.content || '{}');
+      } catch {
+        result = { cardIds: [], reason: "おすすめを生成できませんでした。" };
+      }
+
+      const recommendedCards = await storage.getSkillCardsByIds(result.cardIds || []);
+
+      res.json({
+        cards: recommendedCards,
+        reason: result.reason || "",
+      });
+    } catch (error) {
+      console.error("Error getting recommendations:", error);
+      res.status(500).json({ message: "Failed to get recommendations" });
+    }
+  });
+
   seedDatabase().catch(console.error);
 
   return httpServer;

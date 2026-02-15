@@ -12,13 +12,15 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 
 ## Key Features
 1. Landing page (unauthenticated) with 6 feature cards
-2. Dashboard with skill scores, recommendations, activity
-3. Skill card learning (SPIN, Mirroring, etc.)
-4. AI roleplay with 2 modes: personality-type selection (6 types) and custom free-form with AI pre-questioning
-5. Skill diagnosis (4-axis: listening, questioning, empathy, closing)
-6. Pricing page (3 tiers: Free, Basic, Pro)
-7. Mobile-first design with bottom navigation
-8. Dark/light mode toggle
+2. Dashboard with skill scores, AI-powered recommendations, activity
+3. Skill card learning (SPIN, Mirroring, etc.) with per-user completion tracking
+4. AI roleplay with 2 modes: personality-type selection (6 types + 3 difficulty levels) and custom free-form with AI pre-questioning
+5. Post-roleplay feedback chat with AI coach (SSE streaming, follow-up questions)
+6. AI auto-generated skill cards from roleplay weaknesses (shared globally, deduped by titleJa)
+7. Skill diagnosis (4-axis: listening, questioning, empathy, closing)
+8. Pricing page (3 tiers: Free, Basic, Pro) - UI only, no Stripe
+9. Mobile-first design with bottom navigation
+10. Dark/light mode toggle
 
 ## Project Structure
 - `client/src/pages/` - Landing, Dashboard, Skills, Roleplay, Diagnosis, Pricing
@@ -28,23 +30,27 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 - `server/seed.ts` - Seed data for skill cards and scenarios
 - `shared/schema.ts` - All Drizzle schemas and types
 - `server/replit_integrations/auth/` - Replit Auth module
-- `server/replit_integrations/chat/` - Chat module (not used directly)
 
 ## API Endpoints
 - `GET /api/auth/user` - Current user
 - `GET /api/subscription` - User subscription
 - `GET /api/skill-cards` - All skill cards
 - `GET /api/scenarios` - Roleplay scenarios (legacy)
-- `POST /api/roleplay/start` - Start roleplay session (accepts mode: personality|custom + config)
+- `POST /api/roleplay/start` - Start roleplay session (mode: personality|custom + config + difficulty)
 - `POST /api/roleplay/custom-prepare` - AI pre-questioning for custom mode
 - `POST /api/roleplay/message` - Send message (SSE streaming)
 - `POST /api/roleplay/end` - End session, get diagnosis
+- `POST /api/feedback/start` - Start feedback chat (analyzes session, auto-generates skill cards)
+- `POST /api/feedback/chat` - Follow-up feedback conversation (SSE streaming)
+- `POST /api/skill-cards/:id/complete` - Mark skill card as completed by user
+- `GET /api/skill-progress` - User's skill card completion progress
+- `GET /api/recommendations` - AI-powered skill card recommendations based on latest diagnosis
 - `GET /api/diagnosis/latest` - Latest skill diagnosis
 - `GET /api/diagnosis/history` - Diagnosis history
 - `GET /api/progress/recent` - Recent activity
 
 ## Database Tables
-users, sessions (auth), subscriptions, skill_cards, roleplay_scenarios, roleplay_sessions, skill_diagnoses, user_progress, conversations, messages (chat integration)
+users, sessions (auth), subscriptions, skill_cards (with isAiGenerated, sourceSessionId), roleplay_scenarios, roleplay_sessions (with feedbackChatMessages), skill_diagnoses, user_progress, user_skill_progress, conversations, messages
 
 ## Dev Commands
 - `npm run dev` - Start dev server
@@ -54,3 +60,6 @@ users, sessions (auth), subscriptions, skill_cards, roleplay_scenarios, roleplay
 - Japanese UI language
 - Mobile-first responsive design
 - Instagram-style bottom navigation
+- Skill cards are global/shared; user progress (履修済み) tracked per-user in user_skill_progress
+- Recommendations show relevant cards even if already completed
+- AI auto-generates skill cards without asking permission
