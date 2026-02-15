@@ -710,15 +710,24 @@ JSON形式で回答してください:
         response_format: { type: "json_object" },
       });
 
+      const rawContent = response.choices[0]?.message?.content || '';
+      console.log("Practice exercise raw response:", rawContent.slice(0, 500));
+
       let exercise;
       try {
-        exercise = JSON.parse(response.choices[0]?.message?.content || '{}');
+        const parsed = JSON.parse(rawContent);
+        exercise = {
+          scenario: parsed.scenario || "シナリオの生成に失敗しました。",
+          question: parsed.question || "もう一度お試しください。",
+          hint: parsed.hint || "",
+          idealPoints: Array.isArray(parsed.idealPoints) ? parsed.idealPoints : [],
+        };
       } catch {
         exercise = {
-          scenario: "練習問題の生成に失敗しました。",
-          question: "もう一度お試しください。",
-          hint: "",
-          idealPoints: [],
+          scenario: "練習問題の生成に失敗しました。もう一度お試しください。",
+          question: "このスキルを使った営業シーンを想像し、お客様への対応を考えてみましょう。",
+          hint: `${card.titleJa}のポイントを意識して回答してみましょう。`,
+          idealPoints: card.tipsJa?.slice(0, 3) || [],
         };
       }
 
