@@ -440,7 +440,7 @@ ${conversationText}
 改善点: ${(feedback.weaknesses || []).join("、")}
 会話概要: ${conversationText.slice(0, 500)}
 
-以下のJSON形式で回答してください:
+以下のJSON形式で回答してください。全てのフィールドを日本語で詳しく記入してください:
 {
   "skills": [
     {
@@ -455,6 +455,18 @@ ${conversationText}
       "badExample": "Bad example in English",
       "tipsJa": ["コツ1", "コツ2", "コツ3"],
       "tips": ["Tip 1", "Tip 2", "Tip 3"],
+      "whyEffectiveJa": "なぜこの技術が効果的なのか（心理学的・行動科学的な裏付け、2-3文）",
+      "whyEffective": "Why effective in English",
+      "mechanismJa": "このスキルがどう作用するか（メカニズム解説、2-3文）",
+      "mechanism": "Mechanism in English",
+      "usageScenarioJa": "商談のどの場面で使うか（具体的な活用シーン）",
+      "usageScenario": "Usage scenario in English",
+      "failurePatternsJa": ["よくある失敗パターン1", "失敗パターン2", "失敗パターン3"],
+      "failurePatterns": ["Failure 1", "Failure 2", "Failure 3"],
+      "checklistJa": ["商談前チェック1", "チェック2", "チェック3"],
+      "checklist": ["Check 1", "Check 2", "Check 3"],
+      "successStoryJa": "この技術を使った成功事例（具体的な数値を含む、2-3文）",
+      "successStory": "Success story in English",
       "difficulty": "beginner/intermediate/advanced"
     }
   ]
@@ -487,6 +499,18 @@ ${conversationText}
               badExampleJa: skill.badExampleJa,
               tips: skill.tips || skill.tipsJa || [],
               tipsJa: skill.tipsJa || [],
+              whyEffective: skill.whyEffective || null,
+              whyEffectiveJa: skill.whyEffectiveJa || null,
+              mechanism: skill.mechanism || null,
+              mechanismJa: skill.mechanismJa || null,
+              usageScenario: skill.usageScenario || null,
+              usageScenarioJa: skill.usageScenarioJa || null,
+              failurePatterns: skill.failurePatterns || null,
+              failurePatternsJa: skill.failurePatternsJa || null,
+              checklist: skill.checklist || null,
+              checklistJa: skill.checklistJa || null,
+              successStory: skill.successStory || null,
+              successStoryJa: skill.successStoryJa || null,
               difficulty: skill.difficulty || "intermediate",
               iconName: "Sparkles",
               isPremium: false,
@@ -651,6 +675,112 @@ JSON形式で回答してください:
     } catch (error) {
       console.error("Error getting recommendations:", error);
       res.status(500).json({ message: "Failed to get recommendations" });
+    }
+  });
+
+  app.post("/api/skill-cards/:id/practice", isAuthenticated, async (req: any, res) => {
+    try {
+      const cardId = parseInt(req.params.id);
+      const card = await storage.getSkillCard(cardId);
+      if (!card) {
+        return res.status(404).json({ message: "Skill card not found" });
+      }
+
+      const prompt = `あなたは営業トレーニングの講師です。以下のスキルに基づいて、短い練習問題を1つ作成してください。
+
+スキル名: ${card.titleJa}
+説明: ${card.descriptionJa}
+カテゴリ: ${card.category}
+良い例: ${card.goodExampleJa}
+
+練習問題は、実際の営業シーンを想定した短いシナリオ（2-3文）と、ユーザーが回答すべき質問を含めてください。
+
+JSON形式で回答してください:
+{
+  "scenario": "具体的な営業シナリオの説明（2-3文）",
+  "question": "この状況で、あなたならどう対応しますか？（具体的な質問）",
+  "hint": "回答のヒント（1文）",
+  "idealPoints": ["理想的な回答に含まれるべきポイント1", "ポイント2", "ポイント3"]
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-5-nano",
+        messages: [{ role: "user", content: prompt }],
+        max_completion_tokens: 512,
+        response_format: { type: "json_object" },
+      });
+
+      let exercise;
+      try {
+        exercise = JSON.parse(response.choices[0]?.message?.content || '{}');
+      } catch {
+        exercise = {
+          scenario: "練習問題の生成に失敗しました。",
+          question: "もう一度お試しください。",
+          hint: "",
+          idealPoints: [],
+        };
+      }
+
+      res.json(exercise);
+    } catch (error) {
+      console.error("Error generating practice:", error);
+      res.status(500).json({ message: "Failed to generate practice exercise" });
+    }
+  });
+
+  app.post("/api/skill-cards/:id/practice/evaluate", isAuthenticated, async (req: any, res) => {
+    try {
+      const cardId = parseInt(req.params.id);
+      const { scenario, question, userAnswer } = req.body;
+      if (!userAnswer || !scenario || !question) {
+        return res.status(400).json({ message: "シナリオ、質問、回答はすべて必須です" });
+      }
+
+      const card = await storage.getSkillCard(cardId);
+      if (!card) {
+        return res.status(404).json({ message: "Skill card not found" });
+      }
+
+      const prompt = `あなたは営業スキルの指導者です。以下の練習問題に対するユーザーの回答を評価してください。
+
+スキル: ${card.titleJa}
+スキルの説明: ${card.descriptionJa}
+良い例: ${card.goodExampleJa}
+
+シナリオ: ${scenario}
+質問: ${question}
+ユーザーの回答: ${userAnswer}
+
+以下のJSON形式で評価してください:
+{
+  "score": 1〜5の整数（5が最高）,
+  "feedback": "具体的なフィードバック（3-4文。良い点と改善点を含む）",
+  "improvedAnswer": "改善された模範回答の例（1-2文）"
+}`;
+
+      const response = await openai.chat.completions.create({
+        model: "gpt-5-nano",
+        messages: [{ role: "user", content: prompt }],
+        max_completion_tokens: 512,
+        response_format: { type: "json_object" },
+      });
+
+      let evaluation;
+      try {
+        evaluation = JSON.parse(response.choices[0]?.message?.content || '{}');
+      } catch {
+        evaluation = {
+          score: 3,
+          feedback: "評価の生成に失敗しました。もう一度お試しください。",
+          improvedAnswer: "",
+        };
+      }
+
+      res.json(evaluation);
+    } catch (error) {
+      console.error("Error evaluating practice:", error);
+      res.status(500).json({ message: "Failed to evaluate practice answer" });
     }
   });
 
