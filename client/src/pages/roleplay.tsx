@@ -6,11 +6,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { BottomNav } from "@/components/bottom-nav";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useState, useRef, useEffect } from "react";
-import { useLocation } from "wouter";
+import { useLocation, Link } from "wouter";
+import { FeatureLockedInline } from "@/components/upgrade-banner";
+import { Crown } from "lucide-react";
 import {
   MessageSquare,
   ArrowLeft,
@@ -917,6 +919,11 @@ export default function RoleplayPage() {
   const [chatConfig, setChatConfig] = useState<any>(null);
   const [feedbackSessionId, setFeedbackSessionId] = useState<number | null>(null);
 
+  const { data: subscription } = useQuery<{ plan: string } | null>({
+    queryKey: ["/api/subscription"],
+  });
+  const userPlan = subscription?.plan || "free";
+
   const handleStartChat = (mode: string, config: any) => {
     setChatMode(mode);
     setChatConfig(config);
@@ -986,6 +993,28 @@ export default function RoleplayPage() {
           練習モードを選んで、AIとの模擬商談を始めましょう
         </p>
 
+        {userPlan === "free" && (
+          <div className="flex items-center gap-2 rounded-md border border-primary/20 bg-primary/5 p-3" data-testid="roleplay-plan-info">
+            <Crown className="w-4 h-4 text-primary flex-shrink-0" />
+            <p className="text-xs text-muted-foreground flex-1">
+              Freeプラン: <span className="font-medium text-foreground">月3回</span>まで利用可能
+            </p>
+            <Link href="/pricing">
+              <Button size="sm" variant="outline" data-testid="button-upgrade-roleplay">
+                プラン詳細
+              </Button>
+            </Link>
+          </div>
+        )}
+        {userPlan === "basic" && (
+          <div className="flex items-center gap-2 rounded-md bg-muted/50 p-3" data-testid="roleplay-plan-info">
+            <Sparkles className="w-4 h-4 text-primary flex-shrink-0" />
+            <p className="text-xs text-muted-foreground">
+              Basicプラン: <span className="font-medium text-foreground">月10回</span>まで利用可能
+            </p>
+          </div>
+        )}
+
         <Card
           className="p-5 hover-elevate cursor-pointer"
           onClick={() => setView("personality")}
@@ -1011,8 +1040,8 @@ export default function RoleplayPage() {
         </Card>
 
         <Card
-          className="p-5 hover-elevate cursor-pointer"
-          onClick={() => setView("custom")}
+          className={`p-5 ${userPlan === "free" ? "opacity-70" : "hover-elevate cursor-pointer"}`}
+          onClick={() => userPlan !== "free" && setView("custom")}
           data-testid="card-mode-custom"
         >
           <div className="flex items-start justify-between gap-3">
@@ -1022,12 +1051,22 @@ export default function RoleplayPage() {
                   <Pencil className="w-5 h-5 text-violet-500" />
                 </div>
                 <h3 className="font-semibold text-base">自由設定</h3>
+                {userPlan === "free" && (
+                  <Badge variant="outline" className="text-[10px]">Basic以上</Badge>
+                )}
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 自社と相手の会社情報、過去の関係性、商談フェーズなどを詳細に設定。AIが情報を分析し、最適な顧客人格を自動生成します。
               </p>
+              {userPlan === "free" && (
+                <div className="mt-3">
+                  <FeatureLockedInline feature="カスタムシナリオ" requiredPlan="Basic" />
+                </div>
+              )}
             </div>
-            <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-2" />
+            {userPlan !== "free" && (
+              <ChevronRight className="w-5 h-5 text-muted-foreground flex-shrink-0 mt-2" />
+            )}
           </div>
         </Card>
       </main>
