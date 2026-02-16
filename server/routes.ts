@@ -1015,24 +1015,31 @@ ${conversationText}
       let sub = await storage.getSubscription(userId);
       let customerId = sub?.stripeCustomerId;
 
+      if (customerId) {
+        try {
+          await stripe.customers.retrieve(customerId);
+        } catch (e: any) {
+          if (e?.statusCode === 404 || e?.code === "resource_missing") {
+            customerId = null;
+          } else {
+            throw e;
+          }
+        }
+      }
+
       if (!customerId) {
         const customer = await stripe.customers.create({
           metadata: { userId },
         });
         customerId = customer.id;
-        if (!sub) {
-          sub = await storage.upsertSubscription({
-            userId,
-            plan: "free",
-            status: "active",
-            stripeCustomerId: customerId,
-          });
-        } else {
-          await storage.upsertSubscription({
-            ...sub,
-            stripeCustomerId: customerId,
-          });
-        }
+        await storage.upsertSubscription({
+          userId,
+          plan: sub?.plan || "free",
+          status: sub?.status || "active",
+          stripeCustomerId: customerId,
+          ...(sub?.billingCycle ? { billingCycle: sub.billingCycle } : {}),
+        });
+        sub = await storage.getSubscription(userId);
       }
 
       const baseUrl = `${req.protocol}://${req.get("host")}`;
