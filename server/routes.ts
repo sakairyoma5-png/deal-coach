@@ -968,6 +968,43 @@ ${conversationText}
     }
   });
 
+  app.get("/api/stripe/prices", async (_req, res) => {
+    try {
+      const stripe = await getUncachableStripeClient();
+      const products = await stripe.products.list({ active: true, limit: 20 });
+      const basicProduct = products.data.find((p) => p.metadata?.plan === "basic") ||
+        products.data.find((p) => p.name === "DealCoach Basic");
+      const proProduct = products.data.find((p) => p.metadata?.plan === "pro") ||
+        products.data.find((p) => p.name === "DealCoach Pro");
+
+      const prices = await stripe.prices.list({ active: true, limit: 20 });
+
+      const findPrice = (productId: string, interval: "month" | "year") =>
+        prices.data.find((p) => p.product === productId && p.recurring?.interval === interval);
+
+      const result: Record<string, { monthlyPriceId: string | null; annualPriceId: string | null }> = {
+        basic: { monthlyPriceId: null, annualPriceId: null },
+        pro: { monthlyPriceId: null, annualPriceId: null },
+      };
+
+      if (basicProduct) {
+        const monthly = findPrice(basicProduct.id, "month");
+        const annual = findPrice(basicProduct.id, "year");
+        result.basic = { monthlyPriceId: monthly?.id || null, annualPriceId: annual?.id || null };
+      }
+      if (proProduct) {
+        const monthly = findPrice(proProduct.id, "month");
+        const annual = findPrice(proProduct.id, "year");
+        result.pro = { monthlyPriceId: monthly?.id || null, annualPriceId: annual?.id || null };
+      }
+
+      res.json(result);
+    } catch (error) {
+      console.error("Error fetching Stripe prices:", error);
+      res.status(500).json({ message: "Failed to fetch prices" });
+    }
+  });
+
   app.post("/api/stripe/checkout", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;
