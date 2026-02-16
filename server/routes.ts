@@ -4,6 +4,9 @@ import { storage } from "./storage";
 import { setupAuth, registerAuthRoutes, isAuthenticated } from "./replit_integrations/auth";
 import OpenAI from "openai";
 import { seedDatabase } from "./seed";
+import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClient";
+import { db } from "./db";
+import { sql } from "drizzle-orm";
 
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
@@ -952,6 +955,190 @@ ${conversationText}
     } catch (error) {
       console.error("Error evaluating practice:", error);
       res.status(500).json({ message: "評価の生成に失敗しました" });
+    }
+  });
+
+  app.get("/api/stripe/publishable-key", async (_req, res) => {
+    try {
+      const key = await getStripePublishableKey();
+      res.json({ publishableKey: key });
+    } catch (error) {
+      console.error("Error getting publishable key:", error);
+      res.status(500).json({ message: "Failed to get publishable key" });
+    }
+  });
+
+  app.post("/api/stripe/checkout", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { priceId, plan, billingCycle } = req.body;
+      if (!priceId) return res.status(400).json({ message: "priceId required" });
+
+      const stripe = await getUncachableStripeClient();
+      let sub = await storage.getSubscription(userId);
+      let customerId = sub?.stripeCustomerId;
+
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          metadata: { userId },
+        });
+        customerId = customer.id;
+        if (!sub) {
+          sub = await storage.upsertSubscription({
+            userId,
+            plan: "free",
+            status: "active",
+            stripeCustomerId: customerId,
+          });
+        } else {
+          await storage.upsertSubscription({
+            ...sub,
+            stripeCustomerId: customerId,
+          });
+        }
+      }
+
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        payment_method_types: ["card"],
+        line_items: [{ price: priceId, quantity: 1 }],
+        mode: "subscription",
+        success_url: `${baseUrl}/pricing?success=true`,
+        cancel_url: `${baseUrl}/pricing?canceled=true`,
+        metadata: { userId, plan: plan || "basic", billingCycle: billingCycle || "monthly" },
+      });
+
+      res.json({ url: session.url });
+    } catch (error) {
+      console.error("Error creating checkout session:", error);
+      res.status(500).json({ message: "Failed to create checkout session" });
+    }
+  });
+
+  app.post("/api/stripe/portal", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const sub = await storage.getSubscription(userId);
+      if (!sub?.stripeCustomerId) {
+        return res.status(400).json({ message: "No active subscription" });
+      }
+
+      const stripe = await getUncachableStripeClient();
+      const baseUrl = `${req.protocol}://${req.get("host")}`;
+      const session = await stripe.billingPortal.sessions.create({
+        customer: sub.stripeCustomerId,
+        return_url: `${baseUrl}/pricing`,
+      });
+
+      res.json({ url: session.url });
+    } catch (error) {
+      console.error("Error creating portal session:", error);
+      res.status(500).json({ message: "Failed to create portal session" });
+    }
+  });
+
+  app.post("/api/stripe/sync-subscription", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const sub = await storage.getSubscription(userId);
+      if (!sub?.stripeCustomerId) {
+        return res.json({ plan: "free", status: "active" });
+      }
+
+      const result = await db.execute(
+        sql`SELECT * FROM stripe.subscriptions WHERE customer = ${sub.stripeCustomerId} AND status IN ('active', 'trialing') ORDER BY created DESC LIMIT 1`
+      );
+      const stripeSub = result.rows[0] as any;
+
+      if (stripeSub) {
+        const priceResult = await db.execute(
+          sql`SELECT * FROM stripe.prices WHERE id = ANY(
+            SELECT jsonb_array_elements_text(
+              CASE WHEN jsonb_typeof(items) = 'array' THEN items
+              ELSE '[]'::jsonb END
+            )
+          ) LIMIT 1`
+        );
+
+        let plan = "basic";
+        let billingCycle = "monthly";
+
+        if (stripeSub.metadata) {
+          const meta = typeof stripeSub.metadata === 'string' ? JSON.parse(stripeSub.metadata) : stripeSub.metadata;
+          if (meta.plan) plan = meta.plan;
+          if (meta.billingCycle) billingCycle = meta.billingCycle;
+        }
+
+        const updated = await storage.upsertSubscription({
+          userId,
+          plan,
+          billingCycle,
+          status: stripeSub.status === "active" ? "active" : "inactive",
+          stripeCustomerId: sub.stripeCustomerId,
+          stripeSubscriptionId: stripeSub.id,
+        });
+        return res.json(updated);
+      }
+
+      res.json(sub);
+    } catch (error) {
+      console.error("Error syncing subscription:", error);
+      res.status(500).json({ message: "Failed to sync subscription" });
+    }
+  });
+
+  app.get("/api/calendar/scheduled", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { month } = req.query;
+      if (!month) return res.status(400).json({ message: "month parameter required (YYYY-MM)" });
+      const studies = await storage.getScheduledStudies(userId, month as string);
+      res.json(studies);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch scheduled studies" });
+    }
+  });
+
+  app.post("/api/calendar/schedule", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { skillCardId, scheduledDate } = req.body;
+      if (!skillCardId || !scheduledDate) return res.status(400).json({ message: "skillCardId and scheduledDate required" });
+      const study = await storage.createScheduledStudy(userId, skillCardId, scheduledDate);
+      res.json(study);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to schedule study" });
+    }
+  });
+
+  app.delete("/api/calendar/schedule/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const id = parseInt(req.params.id);
+      await storage.deleteScheduledStudy(id, userId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "Failed to delete scheduled study" });
+    }
+  });
+
+  app.get("/api/calendar/study-logs", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { month } = req.query;
+      if (!month) return res.status(400).json({ message: "month parameter required (YYYY-MM)" });
+      const days = 90;
+      const logs = await storage.getRecentStudyLogs(userId, days);
+      const monthStr = month as string;
+      const filtered = logs.filter(l => {
+        const d = new Date(l.studiedAt!);
+        const logMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+        return logMonth === monthStr;
+      });
+      res.json(filtered);
+    } catch (error) {
+      res.status(500).json({ message: "Failed to fetch study logs" });
     }
   });
 

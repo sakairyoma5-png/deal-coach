@@ -122,6 +122,14 @@ export const skillCardStudyLogs = pgTable("skill_card_study_logs", {
   studiedAt: timestamp("studied_at").defaultNow(),
 });
 
+export const scheduledStudies = pgTable("scheduled_studies", {
+  id: serial("id").primaryKey(),
+  userId: varchar("user_id").notNull(),
+  skillCardId: integer("skill_card_id").notNull(),
+  scheduledDate: text("scheduled_date").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
 export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertSkillCardSchema = createInsertSchema(skillCards).omit({ id: true, createdAt: true });
 export const insertRoleplayScenarioSchema = createInsertSchema(roleplayScenarios).omit({ id: true, createdAt: true });
@@ -130,6 +138,7 @@ export const insertSkillDiagnosisSchema = createInsertSchema(skillDiagnoses).omi
 export const insertUserProgressSchema = createInsertSchema(userProgress).omit({ id: true });
 export const insertUserSkillProgressSchema = createInsertSchema(userSkillProgress).omit({ id: true, completedAt: true });
 export const insertSkillCardStudyLogSchema = createInsertSchema(skillCardStudyLogs).omit({ id: true, studiedAt: true });
+export const insertScheduledStudySchema = createInsertSchema(scheduledStudies).omit({ id: true, createdAt: true });
 
 export type Subscription = typeof subscriptions.$inferSelect;
 export type InsertSubscription = z.infer<typeof insertSubscriptionSchema>;
@@ -147,3 +156,5 @@ export type UserSkillProgress = typeof userSkillProgress.$inferSelect;
 export type InsertUserSkillProgress = z.infer<typeof insertUserSkillProgressSchema>;
 export type SkillCardStudyLog = typeof skillCardStudyLogs.$inferSelect;
 export type InsertSkillCardStudyLog = z.infer<typeof insertSkillCardStudyLogSchema>;
+export type ScheduledStudy = typeof scheduledStudies.$inferSelect;
+export type InsertScheduledStudy = z.infer<typeof insertScheduledStudySchema>;

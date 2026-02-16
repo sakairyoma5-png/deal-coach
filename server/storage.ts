@@ -1,5 +1,5 @@
 import {
-  subscriptions, skillCards, roleplayScenarios, roleplaySessions, skillDiagnoses, userProgress, userSkillProgress, skillCardStudyLogs,
+  subscriptions, skillCards, roleplayScenarios, roleplaySessions, skillDiagnoses, userProgress, userSkillProgress, skillCardStudyLogs, scheduledStudies,
   type Subscription, type InsertSubscription,
   type SkillCard, type InsertSkillCard,
   type RoleplayScenario, type InsertRoleplayScenario,
@@ -8,6 +8,7 @@ import {
   type UserProgress, type InsertUserProgress,
   type UserSkillProgress, type InsertUserSkillProgress,
   type SkillCardStudyLog,
+  type ScheduledStudy,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, sql, inArray, gte } from "drizzle-orm";
@@ -51,6 +52,13 @@ export interface IStorage {
   getRecentStudyLogs(userId: string, days?: number): Promise<SkillCardStudyLog[]>;
   createStudyLog(userId: string, skillCardId: number): Promise<SkillCardStudyLog>;
   hasStudiedToday(userId: string, skillCardId: number): Promise<boolean>;
+
+  getScheduledStudies(userId: string, month: string): Promise<ScheduledStudy[]>;
+  createScheduledStudy(userId: string, skillCardId: number, scheduledDate: string): Promise<ScheduledStudy>;
+  deleteScheduledStudy(id: number, userId: string): Promise<void>;
+
+  updateSubscriptionByStripeCustomerId(stripeCustomerId: string, data: Partial<Subscription>): Promise<Subscription | undefined>;
+  getSubscriptionByStripeCustomerId(stripeCustomerId: string): Promise<Subscription | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -233,6 +241,37 @@ export class DatabaseStorage implements IStorage {
       ))
       .limit(1);
     return !!log;
+  }
+
+  async getScheduledStudies(userId: string, month: string): Promise<ScheduledStudy[]> {
+    return db.select().from(scheduledStudies)
+      .where(and(
+        eq(scheduledStudies.userId, userId),
+        sql`${scheduledStudies.scheduledDate} LIKE ${month + '%'}`,
+      ))
+      .orderBy(scheduledStudies.scheduledDate);
+  }
+
+  async createScheduledStudy(userId: string, skillCardId: number, scheduledDate: string): Promise<ScheduledStudy> {
+    const [s] = await db.insert(scheduledStudies).values({ userId, skillCardId, scheduledDate }).returning();
+    return s;
+  }
+
+  async deleteScheduledStudy(id: number, userId: string): Promise<void> {
+    await db.delete(scheduledStudies).where(and(eq(scheduledStudies.id, id), eq(scheduledStudies.userId, userId)));
+  }
+
+  async updateSubscriptionByStripeCustomerId(stripeCustomerId: string, data: Partial<Subscription>): Promise<Subscription | undefined> {
+    const [sub] = await db.update(subscriptions)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(subscriptions.stripeCustomerId, stripeCustomerId))
+      .returning();
+    return sub;
+  }
+
+  async getSubscriptionByStripeCustomerId(stripeCustomerId: string): Promise<Subscription | undefined> {
+    const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.stripeCustomerId, stripeCustomerId));
+    return sub;
   }
 }
 
