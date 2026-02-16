@@ -11,6 +11,7 @@ import SkillsPage from "@/pages/skills";
 import RoleplayPage from "@/pages/roleplay";
 import DiagnosisPage from "@/pages/diagnosis";
 import PricingPage from "@/pages/pricing";
+import CalendarPage from "@/pages/calendar";
 import NotFound from "@/pages/not-found";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -22,6 +23,7 @@ function AuthenticatedRoutes() {
       <Route path="/roleplay" component={RoleplayPage} />
       <Route path="/diagnosis" component={DiagnosisPage} />
       <Route path="/pricing" component={PricingPage} />
+      <Route path="/calendar" component={CalendarPage} />
       <Route component={NotFound} />
     </Switch>
   );

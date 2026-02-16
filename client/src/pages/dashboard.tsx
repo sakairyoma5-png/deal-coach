@@ -58,7 +58,7 @@ export default function Dashboard() {
     { icon: BookOpen, label: "スキルカード", path: "/skills", color: "text-blue-500", bg: "bg-blue-500/10" },
     { icon: MessageSquare, label: "AIロープレ", path: "/roleplay", color: "text-violet-500", bg: "bg-violet-500/10" },
     { icon: BarChart3, label: "スキル診断", path: "/diagnosis", color: "text-emerald-500", bg: "bg-emerald-500/10" },
-    { icon: Target, label: "料金プラン", path: "/pricing", color: "text-amber-500", bg: "bg-amber-500/10" },
+    { icon: CalendarIcon, label: "学習カレンダー", path: "/calendar", color: "text-amber-500", bg: "bg-amber-500/10" },
   ];
 
   const userPlan = subscription?.plan || "free";
@@ -107,9 +107,11 @@ export default function Dashboard() {
             <h1 className="font-semibold text-base truncate" data-testid="text-user-greeting">
               {user?.firstName ? `${user.firstName}さん` : "こんにちは"}
             </h1>
-            <p className="text-xs text-muted-foreground">
-              {planLabel}プラン
-            </p>
+            <Link href="/pricing">
+              <p className="text-xs text-muted-foreground">
+                {planLabel}プラン <ChevronRight className="w-3 h-3 inline" />
+              </p>
+            </Link>
           </div>
           <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary">
             <TrendingUp className="w-3.5 h-3.5" />
