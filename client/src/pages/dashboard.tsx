@@ -97,15 +97,17 @@ export default function Dashboard() {
 
       <main className="max-w-lg mx-auto px-4 py-5 space-y-5">
         <div className="flex items-center gap-3">
-          <Avatar className="w-12 h-12">
-            <AvatarImage src={user?.profileImageUrl || undefined} />
-            <AvatarFallback className="bg-primary/10 text-primary font-semibold">
-              {user?.firstName?.[0] || user?.email?.[0]?.toUpperCase() || "U"}
-            </AvatarFallback>
-          </Avatar>
+          <Link href="/profile" data-testid="link-profile">
+            <Avatar className="w-12 h-12 cursor-pointer">
+              <AvatarImage src={user?.profileImageUrl || undefined} />
+              <AvatarFallback className="bg-primary/10 text-primary font-semibold">
+                {(user?.displayName || user?.firstName)?.[0] || user?.email?.[0]?.toUpperCase() || "U"}
+              </AvatarFallback>
+            </Avatar>
+          </Link>
           <div className="flex-1 min-w-0">
             <h1 className="font-semibold text-base truncate" data-testid="text-user-greeting">
-              {user?.firstName ? `${user.firstName}さん` : "こんにちは"}
+              {(user?.displayName || user?.firstName) ? `${user?.displayName || user?.firstName}さん` : "こんにちは"}
             </h1>
             <Link href="/pricing">
               <p className="text-xs text-muted-foreground">
