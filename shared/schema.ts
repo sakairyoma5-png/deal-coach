@@ -9,7 +9,7 @@ export * from "./models/chat";
 
 export const subscriptions = pgTable("subscriptions", {
   id: serial("id").primaryKey(),
-  userId: varchar("user_id").notNull(),
+  userId: varchar("user_id").notNull().unique(),
   plan: text("plan").notNull().default("free"),
   billingCycle: text("billing_cycle").default("monthly"),
   stripeCustomerId: text("stripe_customer_id"),
