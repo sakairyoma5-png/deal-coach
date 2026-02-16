@@ -44,7 +44,8 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 - `server/replit_integrations/auth/` - Replit Auth module
 
 ## API Endpoints
-- `GET /api/auth/user` - Current user
+- `GET /api/auth/user` - Current user (includes displayName)
+- `PATCH /api/auth/profile` - Update display name (body: { displayName })
 - `GET /api/subscription` - User subscription
 - `GET /api/skill-cards` - All skill cards
 - `GET /api/scenarios` - Roleplay scenarios (legacy)
