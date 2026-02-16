@@ -4,68 +4,81 @@ async function seedStripeProducts() {
   const stripe = await getUncachableStripeClient();
 
   const existingProducts = await stripe.products.list({ limit: 100 });
-  const basicExists = existingProducts.data.find(p => p.metadata?.plan === 'basic');
-  const proExists = existingProducts.data.find(p => p.metadata?.plan === 'pro');
 
-  if (!basicExists) {
-    console.log('Creating Basic plan product...');
-    const basicProduct = await stripe.products.create({
-      name: 'DealCoach Basic',
-      description: '全スキルカード、月10回AIロープレ、詳細スキル診断、学習カレンダー',
-      metadata: { plan: 'basic' },
-    });
-
-    await stripe.prices.create({
-      product: basicProduct.id,
-      unit_amount: 300000,
-      currency: 'jpy',
-      recurring: { interval: 'month' },
-      metadata: { plan: 'basic', billingCycle: 'monthly' },
-    });
-
-    await stripe.prices.create({
-      product: basicProduct.id,
-      unit_amount: 3000000,
-      currency: 'jpy',
-      recurring: { interval: 'year' },
-      metadata: { plan: 'basic', billingCycle: 'annual' },
-    });
-
-    console.log('Basic plan created:', basicProduct.id);
-  } else {
-    console.log('Basic plan already exists:', basicExists.id);
+  for (const product of existingProducts.data) {
+    if (product.metadata?.plan === 'basic' || product.metadata?.plan === 'pro') {
+      console.log(`Archiving old product: ${product.name} (${product.id})`);
+      const prices = await stripe.prices.list({ product: product.id, limit: 100 });
+      for (const price of prices.data) {
+        if (price.active) {
+          await stripe.prices.update(price.id, { active: false });
+        }
+      }
+      await stripe.products.update(product.id, { active: false });
+    }
   }
 
-  if (!proExists) {
-    console.log('Creating Pro plan product...');
-    const proProduct = await stripe.products.create({
-      name: 'DealCoach Pro',
-      description: '全機能無制限、AIレコメンド、カスタムシナリオ無制限',
-      metadata: { plan: 'pro' },
-    });
+  console.log('Creating Basic plan product...');
+  const basicProduct = await stripe.products.create({
+    name: 'DealCoach Basic',
+    description: '全スキルカード、月10回AIロープレ、詳細スキル診断、学習カレンダー',
+    metadata: { plan: 'basic' },
+  });
 
-    await stripe.prices.create({
-      product: proProduct.id,
-      unit_amount: 450000,
-      currency: 'jpy',
-      recurring: { interval: 'month' },
-      metadata: { plan: 'pro', billingCycle: 'monthly' },
-    });
+  const basicMonthly = await stripe.prices.create({
+    product: basicProduct.id,
+    unit_amount: 3000,
+    currency: 'jpy',
+    recurring: { interval: 'month' },
+    metadata: { plan: 'basic', billingCycle: 'monthly' },
+  });
 
-    await stripe.prices.create({
-      product: proProduct.id,
-      unit_amount: 4500000,
-      currency: 'jpy',
-      recurring: { interval: 'year' },
-      metadata: { plan: 'pro', billingCycle: 'annual' },
-    });
+  const basicAnnual = await stripe.prices.create({
+    product: basicProduct.id,
+    unit_amount: 30000,
+    currency: 'jpy',
+    recurring: { interval: 'year' },
+    metadata: { plan: 'basic', billingCycle: 'annual' },
+  });
 
-    console.log('Pro plan created:', proProduct.id);
-  } else {
-    console.log('Pro plan already exists:', proExists.id);
-  }
+  console.log('Basic plan created:', basicProduct.id);
+  console.log('  Monthly price:', basicMonthly.id, '¥3,000/月');
+  console.log('  Annual price:', basicAnnual.id, '¥30,000/年');
 
-  console.log('Stripe product seeding complete!');
+  console.log('Creating Pro plan product...');
+  const proProduct = await stripe.products.create({
+    name: 'DealCoach Pro',
+    description: '全機能無制限、AIレコメンド、カスタムシナリオ無制限',
+    metadata: { plan: 'pro' },
+  });
+
+  const proMonthly = await stripe.prices.create({
+    product: proProduct.id,
+    unit_amount: 4500,
+    currency: 'jpy',
+    recurring: { interval: 'month' },
+    metadata: { plan: 'pro', billingCycle: 'monthly' },
+  });
+
+  const proAnnual = await stripe.prices.create({
+    product: proProduct.id,
+    unit_amount: 45000,
+    currency: 'jpy',
+    recurring: { interval: 'year' },
+    metadata: { plan: 'pro', billingCycle: 'annual' },
+  });
+
+  console.log('Pro plan created:', proProduct.id);
+  console.log('  Monthly price:', proMonthly.id, '¥4,500/月');
+  console.log('  Annual price:', proAnnual.id, '¥45,000/年');
+
+  console.log('\n=== UPDATE pricing.tsx with these price IDs ===');
+  console.log(`Basic Monthly: ${basicMonthly.id}`);
+  console.log(`Basic Annual: ${basicAnnual.id}`);
+  console.log(`Pro Monthly: ${proMonthly.id}`);
+  console.log(`Pro Annual: ${proAnnual.id}`);
+
+  console.log('\nStripe product seeding complete!');
 }
 
 seedStripeProducts().catch(console.error);

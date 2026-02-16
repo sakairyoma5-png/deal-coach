@@ -25,6 +25,7 @@ import type { Subscription } from "@shared/schema";
 export default function PricingPage() {
   const { isAuthenticated } = useAuth();
   const [isAnnual, setIsAnnual] = useState(false);
+  const [checkingOutPlan, setCheckingOutPlan] = useState<string | null>(null);
   const [, navigate] = useLocation();
   const search = useSearch();
   const { toast } = useToast();
@@ -70,6 +71,7 @@ export default function PricingPage() {
       }
     },
     onError: () => {
+      setCheckingOutPlan(null);
       toast({ title: "エラー", description: "チェックアウトの作成に失敗しました。", variant: "destructive" });
     },
   });
@@ -115,8 +117,8 @@ export default function PricingPage() {
       icon: Star,
       monthlyPrice: 3000,
       annualPrice: 30000,
-      monthlyPriceId: "price_1T1GVn95hoZRgn2nL4r2BJbI",
-      annualPriceId: "price_1T1GVo95hoZRgn2nfRMvoTEy",
+      monthlyPriceId: "price_1T1HX395hoZRgn2nnx0kWufA",
+      annualPriceId: "price_1T1HX495hoZRgn2nSfXpQC4X",
       features: [
         { text: "全スキルカード", included: true },
         { text: "AIロープレ 月10回", included: true },
@@ -134,8 +136,8 @@ export default function PricingPage() {
       icon: Crown,
       monthlyPrice: 4500,
       annualPrice: 45000,
-      monthlyPriceId: "price_1T1GVo95hoZRgn2nyDf6ksP3",
-      annualPriceId: "price_1T1GVo95hoZRgn2nEzvqlFBx",
+      monthlyPriceId: "price_1T1HX495hoZRgn2nRtKjQf1F",
+      annualPriceId: "price_1T1HX495hoZRgn2n468wpOQc",
       features: [
         { text: "全スキルカード", included: true },
         { text: "AIロープレ 無制限", included: true },
@@ -154,11 +156,12 @@ export default function PricingPage() {
       navigate("/");
       return;
     }
-    if (plan.id === "free") return;
+    if (plan.id === "free" || checkingOutPlan) return;
 
     const priceId = isAnnual ? plan.annualPriceId : plan.monthlyPriceId;
     if (!priceId) return;
 
+    setCheckingOutPlan(plan.id);
     checkoutMutation.mutate({
       priceId,
       plan: plan.id,
@@ -314,10 +317,10 @@ export default function PricingPage() {
                     className="w-full"
                     variant={plan.highlight ? "default" : "outline"}
                     onClick={() => handleSelectPlan(plan)}
-                    disabled={checkoutMutation.isPending}
+                    disabled={!!checkingOutPlan}
                     data-testid={`button-select-${plan.id}`}
                   >
-                    {checkoutMutation.isPending && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
+                    {checkingOutPlan === plan.id && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
                     {plan.cta}
                   </Button>
                 ) : (
