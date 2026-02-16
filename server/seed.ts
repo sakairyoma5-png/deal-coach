@@ -102,9 +102,7 @@ export async function seedDatabase() {
     }
   }
 
-  if (process.env.NODE_ENV !== "production") {
-    await ensureStripeProducts();
-  }
+  await ensureStripeProducts();
 
   console.log("Seed check complete");
 }

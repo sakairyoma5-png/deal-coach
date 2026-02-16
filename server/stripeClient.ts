@@ -10,37 +10,45 @@ async function getCredentials() {
       ? 'depl ' + process.env.WEB_REPL_RENEWAL
       : null;
 
-  if (!xReplitToken) {
-    throw new Error('X_REPLIT_TOKEN not found for repl/depl');
-  }
+  if (hostname && xReplitToken) {
+    try {
+      const connectorName = 'stripe';
+      const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
+      const targetEnvironment = isProduction ? 'production' : 'development';
 
-  const connectorName = 'stripe';
-  const isProduction = process.env.REPLIT_DEPLOYMENT === '1';
-  const targetEnvironment = isProduction ? 'production' : 'development';
+      const url = new URL(`https://${hostname}/api/v2/connection`);
+      url.searchParams.set('include_secrets', 'true');
+      url.searchParams.set('connector_names', connectorName);
+      url.searchParams.set('environment', targetEnvironment);
 
-  const url = new URL(`https://${hostname}/api/v2/connection`);
-  url.searchParams.set('include_secrets', 'true');
-  url.searchParams.set('connector_names', connectorName);
-  url.searchParams.set('environment', targetEnvironment);
+      const response = await fetch(url.toString(), {
+        headers: {
+          'Accept': 'application/json',
+          'X_REPLIT_TOKEN': xReplitToken
+        }
+      });
 
-  const response = await fetch(url.toString(), {
-    headers: {
-      'Accept': 'application/json',
-      'X_REPLIT_TOKEN': xReplitToken
+      const data = await response.json();
+      connectionSettings = data.items?.[0];
+
+      if (connectionSettings?.settings?.publishable && connectionSettings?.settings?.secret) {
+        return {
+          publishableKey: connectionSettings.settings.publishable,
+          secretKey: connectionSettings.settings.secret,
+        };
+      }
+    } catch (e) {
     }
-  });
-
-  const data = await response.json();
-  connectionSettings = data.items?.[0];
-
-  if (!connectionSettings || (!connectionSettings.settings.publishable || !connectionSettings.settings.secret)) {
-    throw new Error(`Stripe ${targetEnvironment} connection not found`);
   }
 
-  return {
-    publishableKey: connectionSettings.settings.publishable,
-    secretKey: connectionSettings.settings.secret,
-  };
+  if (process.env.STRIPE_SECRET_KEY && process.env.STRIPE_PUBLISHABLE_KEY) {
+    return {
+      publishableKey: process.env.STRIPE_PUBLISHABLE_KEY,
+      secretKey: process.env.STRIPE_SECRET_KEY,
+    };
+  }
+
+  throw new Error('Stripe credentials not found. Set STRIPE_SECRET_KEY and STRIPE_PUBLISHABLE_KEY or configure the Stripe connector.');
 }
 
 export async function getUncachableStripeClient() {

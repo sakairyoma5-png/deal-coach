@@ -85,8 +85,8 @@ users, sessions (auth), subscriptions (with stripeCustomerId, stripeSubscription
 - Each product has monthly and annual prices in JPY
 - Price IDs are fetched dynamically via /api/stripe/prices (no hardcoded IDs)
 - Products looked up by metadata.plan ("basic"/"pro") with name fallback
-- Auto-seeding of Stripe products on dev startup if missing (disabled in production)
-- For production: run `npx tsx server/seed-stripe.ts` manually to create products
+- Auto-seeding of Stripe products on startup if missing (all environments)
+- stripeClient.ts: Replit connector first, fallback to STRIPE_SECRET_KEY/STRIPE_PUBLISHABLE_KEY env vars
 - stripe-replit-sync manages stripe schema tables (products, prices, subscriptions, customers)
 - Webhook registered BEFORE express.json() in index.ts
 - Subscription status: stored in local subscriptions table, synced from Stripe on checkout success
