@@ -1,6 +1,44 @@
 import { storage } from "./storage";
 import { seedCards1 } from "./seed-cards-1";
 import { seedCards2 } from "./seed-cards-2";
+import { getUncachableStripeClient } from "./stripeClient";
+
+async function ensureStripeProducts() {
+  try {
+    const stripe = await getUncachableStripeClient();
+    const products = await stripe.products.list({ active: true, limit: 10 });
+    const hasBasic = products.data.some((p) => p.name === "DealCoach Basic");
+    const hasPro = products.data.some((p) => p.name === "DealCoach Pro");
+
+    if (hasBasic && hasPro) {
+      return;
+    }
+
+    if (!hasBasic) {
+      const basicProduct = await stripe.products.create({
+        name: "DealCoach Basic",
+        description: "全スキルカード、月10回AIロープレ、詳細スキル診断、学習カレンダー",
+        metadata: { plan: "basic" },
+      });
+      await stripe.prices.create({ product: basicProduct.id, unit_amount: 3000, currency: "jpy", recurring: { interval: "month" }, metadata: { plan: "basic", billingCycle: "monthly" } });
+      await stripe.prices.create({ product: basicProduct.id, unit_amount: 30000, currency: "jpy", recurring: { interval: "year" }, metadata: { plan: "basic", billingCycle: "annual" } });
+      console.log("Created DealCoach Basic product with prices");
+    }
+
+    if (!hasPro) {
+      const proProduct = await stripe.products.create({
+        name: "DealCoach Pro",
+        description: "全機能無制限、AIレコメンド、カスタムシナリオ無制限",
+        metadata: { plan: "pro" },
+      });
+      await stripe.prices.create({ product: proProduct.id, unit_amount: 4500, currency: "jpy", recurring: { interval: "month" }, metadata: { plan: "pro", billingCycle: "monthly" } });
+      await stripe.prices.create({ product: proProduct.id, unit_amount: 45000, currency: "jpy", recurring: { interval: "year" }, metadata: { plan: "pro", billingCycle: "annual" } });
+      console.log("Created DealCoach Pro product with prices");
+    }
+  } catch (error) {
+    console.error("Error ensuring Stripe products:", error);
+  }
+}
 
 export async function seedDatabase() {
   const cardCount = await storage.getSkillCardCount();
@@ -62,6 +100,10 @@ export async function seedDatabase() {
     for (const scenario of scenariosData) {
       await storage.createScenario(scenario);
     }
+  }
+
+  if (process.env.NODE_ENV !== "production") {
+    await ensureStripeProducts();
   }
 
   console.log("Seed check complete");

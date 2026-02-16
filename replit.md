@@ -67,6 +67,7 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 - `GET /api/study-logs/recent?days=N` - Recent study logs (default 30 days)
 - `POST /api/study-logs` - Record a skill card study (body: { skillCardId })
 - `GET /api/stripe/publishable-key` - Stripe publishable key
+- `GET /api/stripe/prices` - Dynamic price IDs from Stripe (by product metadata/name lookup)
 - `POST /api/stripe/checkout` - Create Stripe Checkout session (body: { priceId, plan, billingCycle })
 - `POST /api/stripe/portal` - Create Stripe Customer Portal session (for plan management/cancellation)
 - `POST /api/stripe/sync-subscription` - Sync subscription status from Stripe to local DB
@@ -82,6 +83,10 @@ users, sessions (auth), subscriptions (with stripeCustomerId, stripeSubscription
 ## Stripe Integration
 - Products created via Stripe API (seed-stripe.ts): DealCoach Basic, DealCoach Pro
 - Each product has monthly and annual prices in JPY
+- Price IDs are fetched dynamically via /api/stripe/prices (no hardcoded IDs)
+- Products looked up by metadata.plan ("basic"/"pro") with name fallback
+- Auto-seeding of Stripe products on dev startup if missing (disabled in production)
+- For production: run `npx tsx server/seed-stripe.ts` manually to create products
 - stripe-replit-sync manages stripe schema tables (products, prices, subscriptions, customers)
 - Webhook registered BEFORE express.json() in index.ts
 - Subscription status: stored in local subscriptions table, synced from Stripe on checkout success

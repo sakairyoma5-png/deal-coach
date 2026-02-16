@@ -22,6 +22,8 @@ import { Link, useLocation, useSearch } from "wouter";
 import { useToast } from "@/hooks/use-toast";
 import type { Subscription } from "@shared/schema";
 
+type StripePrices = Record<string, { monthlyPriceId: string | null; annualPriceId: string | null }>;
+
 export default function PricingPage() {
   const { isAuthenticated } = useAuth();
   const [isAnnual, setIsAnnual] = useState(false);
@@ -33,6 +35,10 @@ export default function PricingPage() {
   const { data: subscription, refetch: refetchSub } = useQuery<Subscription | null>({
     queryKey: ["/api/subscription"],
     enabled: isAuthenticated,
+  });
+
+  const { data: stripePrices } = useQuery<StripePrices>({
+    queryKey: ["/api/stripe/prices"],
   });
 
   const syncMutation = useMutation({
@@ -98,8 +104,6 @@ export default function PricingPage() {
       icon: Zap,
       monthlyPrice: 0,
       annualPrice: 0,
-      monthlyPriceId: null,
-      annualPriceId: null,
       features: [
         { text: "スキルカード 1日3枚まで", included: true },
         { text: "AIロープレ 月3回", included: true },
@@ -117,8 +121,6 @@ export default function PricingPage() {
       icon: Star,
       monthlyPrice: 3000,
       annualPrice: 30000,
-      monthlyPriceId: "price_1T1HX395hoZRgn2nnx0kWufA",
-      annualPriceId: "price_1T1HX495hoZRgn2nSfXpQC4X",
       features: [
         { text: "全スキルカード", included: true },
         { text: "AIロープレ 月10回", included: true },
@@ -136,8 +138,6 @@ export default function PricingPage() {
       icon: Crown,
       monthlyPrice: 4500,
       annualPrice: 45000,
-      monthlyPriceId: "price_1T1HX495hoZRgn2nRtKjQf1F",
-      annualPriceId: "price_1T1HX495hoZRgn2n468wpOQc",
       features: [
         { text: "全スキルカード", included: true },
         { text: "AIロープレ 無制限", included: true },
@@ -151,6 +151,13 @@ export default function PricingPage() {
     },
   ];
 
+  const getPriceId = (planId: string) => {
+    if (!stripePrices || planId === "free") return null;
+    const p = stripePrices[planId];
+    if (!p) return null;
+    return isAnnual ? p.annualPriceId : p.monthlyPriceId;
+  };
+
   const handleSelectPlan = (plan: typeof plans[0]) => {
     if (!isAuthenticated) {
       navigate("/");
@@ -158,7 +165,7 @@ export default function PricingPage() {
     }
     if (plan.id === "free" || checkingOutPlan) return;
 
-    const priceId = isAnnual ? plan.annualPriceId : plan.monthlyPriceId;
+    const priceId = getPriceId(plan.id);
     if (!priceId) return;
 
     setCheckingOutPlan(plan.id);
@@ -250,6 +257,7 @@ export default function PricingPage() {
             const isCurrent = currentPlan === plan.id;
             const isUpgrade = plan.id !== "free" && !isCurrent;
             const isDowngrade = plan.id === "free" && currentPlan !== "free";
+            const hasPriceId = plan.id === "free" || !!getPriceId(plan.id);
 
             return (
               <Card
@@ -317,7 +325,7 @@ export default function PricingPage() {
                     className="w-full"
                     variant={plan.highlight ? "default" : "outline"}
                     onClick={() => handleSelectPlan(plan)}
-                    disabled={!!checkingOutPlan}
+                    disabled={!!checkingOutPlan || !hasPriceId}
                     data-testid={`button-select-${plan.id}`}
                   >
                     {checkingOutPlan === plan.id && <Loader2 className="w-4 h-4 animate-spin mr-1" />}
