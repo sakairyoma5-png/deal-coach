@@ -341,9 +341,10 @@ export default function PricingPage() {
           })}
         </div>
 
-        <div className="text-center text-xs text-muted-foreground space-y-1 pt-2">
-          <p>月額プラン: 支払日から次回請求日まで利用可能</p>
-          <p>年額プラン: 支払日から1年間利用可能</p>
+        <div className="text-center text-xs text-muted-foreground space-y-1.5 pt-2">
+          <p>月額プラン: 契約日と同じ日に毎月自動更新</p>
+          <p>年額プラン: 契約日から1年後に自動更新</p>
+          <p className="text-muted-foreground/70">（例: 1月31日契約の場合、翌月は2月28日に更新）</p>
           <p>解約後も現在の請求期間終了まで利用できます</p>
         </div>
       </main>
