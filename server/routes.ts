@@ -363,6 +363,19 @@ ${recentStudyContext}
         weaknesses: result.weaknesses || [],
       });
 
+      const userOrgId = await storage.getUserOrgId(userId);
+      await storage.createPracticeLog({
+        orgId: userOrgId,
+        userId,
+        sessionId,
+        score: result.overallScore || 50,
+        listening: result.listening || 50,
+        questioning: result.questioning || 50,
+        empathy: result.empathy || 50,
+        closing: result.closing || 50,
+        practiceType: "roleplay",
+      });
+
       res.json(diagnosis);
     } catch (error) {
       console.error("Error ending roleplay:", error);
@@ -951,6 +964,17 @@ ${conversationText}
         };
       }
 
+      const practiceUserId = req.user.claims.sub;
+      const practiceOrgId = await storage.getUserOrgId(practiceUserId);
+      const scoreAsPercent = Math.round((evaluation.score / 5) * 100);
+      await storage.createPracticeLog({
+        orgId: practiceOrgId,
+        userId: practiceUserId,
+        skillCardId: cardId,
+        score: scoreAsPercent,
+        practiceType: "skill_card",
+      });
+
       res.json(evaluation);
     } catch (error) {
       console.error("Error evaluating practice:", error);
@@ -1183,6 +1207,354 @@ ${conversationText}
       res.json(filtered);
     } catch (error) {
       res.status(500).json({ message: "Failed to fetch study logs" });
+    }
+  });
+
+  // Organization endpoints
+
+  app.post("/api/org", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { name } = req.body;
+      if (!name || typeof name !== "string" || name.trim().length === 0) {
+        return res.status(400).json({ message: "組織名を入力してください" });
+      }
+      const inviteCode = Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
+      const org = await storage.createOrganization({ name: name.trim(), createdBy: userId, inviteCode });
+      await storage.addOrgMember({ orgId: org.id, userId, role: "admin" });
+      res.json(org);
+    } catch (error) {
+      console.error("Error creating organization:", error);
+      res.status(500).json({ message: "組織の作成に失敗しました" });
+    }
+  });
+
+  app.get("/api/org", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const orgs = await storage.getUserOrganizations(userId);
+      res.json(orgs);
+    } catch (error) {
+      res.status(500).json({ message: "組織の取得に失敗しました" });
+    }
+  });
+
+  app.get("/api/org/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const orgId = parseInt(req.params.id);
+      const role = await storage.getOrgMemberRole(orgId, userId);
+      if (!role) return res.status(403).json({ message: "この組織のメンバーではありません" });
+      const org = await storage.getOrganization(orgId);
+      if (!org) return res.status(404).json({ message: "組織が見つかりません" });
+      res.json({ ...org, role });
+    } catch (error) {
+      res.status(500).json({ message: "組織の取得に失敗しました" });
+    }
+  });
+
+  app.post("/api/org/:id/invite", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const orgId = parseInt(req.params.id);
+      const role = await storage.getOrgMemberRole(orgId, userId);
+      if (role !== "admin") return res.status(403).json({ message: "管理者のみ招待できます" });
+      const org = await storage.getOrganization(orgId);
+      if (!org) return res.status(404).json({ message: "組織が見つかりません" });
+      res.json({ inviteCode: org.inviteCode });
+    } catch (error) {
+      res.status(500).json({ message: "招待コードの取得に失敗しました" });
+    }
+  });
+
+  app.post("/api/org/join/:code", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { code } = req.params;
+      const org = await storage.getOrganizationByInviteCode(code);
+      if (!org) return res.status(404).json({ message: "招待コードが無効です" });
+      await storage.addOrgMember({ orgId: org.id, userId, role: "member" });
+      res.json(org);
+    } catch (error) {
+      res.status(500).json({ message: "組織への参加に失敗しました" });
+    }
+  });
+
+  app.get("/api/org/:id/members", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const orgId = parseInt(req.params.id);
+      const role = await storage.getOrgMemberRole(orgId, userId);
+      if (!role) return res.status(403).json({ message: "この組織のメンバーではありません" });
+      const members = await storage.getOrgMembers(orgId);
+      res.json(members);
+    } catch (error) {
+      res.status(500).json({ message: "メンバーの取得に失敗しました" });
+    }
+  });
+
+  app.patch("/api/org/:id/members/:userId", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUserId = req.user.claims.sub;
+      const orgId = parseInt(req.params.id);
+      const targetUserId = req.params.userId;
+      const { role: newRole } = req.body;
+      const currentRole = await storage.getOrgMemberRole(orgId, currentUserId);
+      if (currentRole !== "admin") return res.status(403).json({ message: "管理者のみロールを変更できます" });
+      if (!["admin", "member"].includes(newRole)) return res.status(400).json({ message: "無効なロールです" });
+      const updated = await storage.updateOrgMemberRole(orgId, targetUserId, newRole);
+      res.json(updated);
+    } catch (error) {
+      res.status(500).json({ message: "ロールの変更に失敗しました" });
+    }
+  });
+
+  app.delete("/api/org/:id/members/:userId", isAuthenticated, async (req: any, res) => {
+    try {
+      const currentUserId = req.user.claims.sub;
+      const orgId = parseInt(req.params.id);
+      const targetUserId = req.params.userId;
+      const currentRole = await storage.getOrgMemberRole(orgId, currentUserId);
+      if (currentRole !== "admin" && currentUserId !== targetUserId) {
+        return res.status(403).json({ message: "管理者のみメンバーを削除できます" });
+      }
+      await storage.removeOrgMember(orgId, targetUserId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "メンバーの削除に失敗しました" });
+    }
+  });
+
+  app.get("/api/org/:id/dashboard", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const orgId = parseInt(req.params.id);
+      const role = await storage.getOrgMemberRole(orgId, userId);
+      if (role !== "admin") return res.status(403).json({ message: "管理者のみアクセスできます" });
+
+      const members = await storage.getOrgMembers(orgId);
+      const now = new Date();
+      const dayOfWeek = now.getDay();
+      const weekStartDate = new Date(now);
+      weekStartDate.setDate(now.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+      weekStartDate.setHours(0, 0, 0, 0);
+      const weekStart = weekStartDate.toISOString().split("T")[0];
+
+      const weeklyStats = await storage.getWeeklyPracticeStats(orgId, weekStart);
+      const allLogs = await storage.getPracticeLogsByOrg(orgId, 200);
+      const allCards = await storage.getAllSkillCards();
+
+      const currentWeekCurriculum = await storage.getCurriculumByWeek(orgId, weekStart);
+
+      const memberDashboard = members.map(member => {
+        const memberStats = weeklyStats.find(s => s.userId === member.userId);
+        const memberLogs = allLogs.filter(l => l.userId === member.userId);
+        const latestLog = memberLogs[0];
+
+        const completedCardIds = new Set(
+          memberLogs.filter(l => l.skillCardId).map(l => l.skillCardId!)
+        );
+        const completionRate = allCards.length > 0
+          ? Math.round((completedCardIds.size / allCards.length) * 100)
+          : 0;
+
+        const curriculumCompleted = currentWeekCurriculum.filter(c =>
+          memberLogs.some(l =>
+            l.skillCardId === c.skillCardId &&
+            l.practicedAt && new Date(l.practicedAt) >= weekStartDate
+          )
+        ).length;
+
+        return {
+          userId: member.userId,
+          displayName: member.displayName,
+          email: member.email,
+          role: member.role,
+          weeklyPracticeCount: memberStats?.count || 0,
+          avgScore: memberStats?.avgScore || 0,
+          latestScore: latestLog?.score || null,
+          latestListening: latestLog?.listening || null,
+          latestQuestioning: latestLog?.questioning || null,
+          latestEmpathy: latestLog?.empathy || null,
+          latestClosing: latestLog?.closing || null,
+          completionRate,
+          curriculumTotal: currentWeekCurriculum.length,
+          curriculumCompleted,
+        };
+      });
+
+      const nonParticipants = memberDashboard.filter(m => m.weeklyPracticeCount === 0);
+
+      res.json({
+        members: memberDashboard,
+        nonParticipants,
+        weekStart,
+        totalMembers: members.length,
+        totalCards: allCards.length,
+        curriculum: currentWeekCurriculum,
+      });
+    } catch (error) {
+      console.error("Error fetching org dashboard:", error);
+      res.status(500).json({ message: "ダッシュボードの取得に失敗しました" });
+    }
+  });
+
+  app.get("/api/org/:id/practice-logs", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const orgId = parseInt(req.params.id);
+      const role = await storage.getOrgMemberRole(orgId, userId);
+      if (!role) return res.status(403).json({ message: "この組織のメンバーではありません" });
+      const logs = await storage.getPracticeLogsByOrg(orgId, 100);
+      const members = await storage.getOrgMembers(orgId);
+      const cards = await storage.getAllSkillCards();
+
+      const enrichedLogs = logs.map(log => {
+        const member = members.find(m => m.userId === log.userId);
+        const card = cards.find(c => c.id === log.skillCardId);
+        return {
+          ...log,
+          displayName: member?.displayName || "不明",
+          skillCardTitle: card?.titleJa || "不明",
+        };
+      });
+      res.json(enrichedLogs);
+    } catch (error) {
+      res.status(500).json({ message: "練習ログの取得に失敗しました" });
+    }
+  });
+
+  app.post("/api/org/:id/curriculum", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const orgId = parseInt(req.params.id);
+      const role = await storage.getOrgMemberRole(orgId, userId);
+      if (role !== "admin") return res.status(403).json({ message: "管理者のみカリキュラムを指定できます" });
+      const { skillCardId, weekStart, weekEnd } = req.body;
+      if (!skillCardId || !weekStart || !weekEnd) {
+        return res.status(400).json({ message: "skillCardId, weekStart, weekEnd が必要です" });
+      }
+      const assignment = await storage.createCurriculumAssignment({
+        orgId, skillCardId, assignedBy: userId, weekStart, weekEnd,
+      });
+
+      const members = await storage.getOrgMembers(orgId);
+      const card = await storage.getSkillCard(skillCardId);
+      for (const member of members) {
+        if (member.userId !== userId) {
+          await storage.createOrgNotification({
+            orgId,
+            userId: member.userId,
+            type: "curriculum",
+            message: `今週のカリキュラムに「${card?.titleJa || "スキルカード"}」が追加されました`,
+            isRead: false,
+          });
+        }
+      }
+
+      res.json(assignment);
+    } catch (error) {
+      res.status(500).json({ message: "カリキュラムの指定に失敗しました" });
+    }
+  });
+
+  app.get("/api/org/:id/curriculum", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const orgId = parseInt(req.params.id);
+      const role = await storage.getOrgMemberRole(orgId, userId);
+      if (!role) return res.status(403).json({ message: "この組織のメンバーではありません" });
+      const { weekStart } = req.query;
+      const curriculum = weekStart
+        ? await storage.getCurriculumByWeek(orgId, weekStart as string)
+        : await storage.getCurriculumByOrg(orgId);
+      res.json(curriculum);
+    } catch (error) {
+      res.status(500).json({ message: "カリキュラムの取得に失敗しました" });
+    }
+  });
+
+  app.delete("/api/org/:id/curriculum/:assignmentId", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const orgId = parseInt(req.params.id);
+      const assignmentId = parseInt(req.params.assignmentId);
+      const role = await storage.getOrgMemberRole(orgId, userId);
+      if (role !== "admin") return res.status(403).json({ message: "管理者のみ削除できます" });
+      await storage.deleteCurriculumAssignment(assignmentId, orgId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "カリキュラムの削除に失敗しました" });
+    }
+  });
+
+  app.get("/api/org/:id/trends", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const orgId = parseInt(req.params.id);
+      const role = await storage.getOrgMemberRole(orgId, userId);
+      if (!role) return res.status(403).json({ message: "この組織のメンバーではありません" });
+
+      const logs = await storage.getPracticeLogsByOrg(orgId, 500);
+      const weeklyData: Record<string, { scores: number[]; listening: number[]; questioning: number[]; empathy: number[]; closing: number[]; count: number }> = {};
+
+      for (const log of logs) {
+        if (!log.practicedAt) continue;
+        const date = new Date(log.practicedAt);
+        const dayOfWeek = date.getDay();
+        const weekStartDate = new Date(date);
+        weekStartDate.setDate(date.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+        const weekKey = weekStartDate.toISOString().split("T")[0];
+
+        if (!weeklyData[weekKey]) {
+          weeklyData[weekKey] = { scores: [], listening: [], questioning: [], empathy: [], closing: [], count: 0 };
+        }
+        weeklyData[weekKey].count++;
+        if (log.score) weeklyData[weekKey].scores.push(log.score);
+        if (log.listening) weeklyData[weekKey].listening.push(log.listening);
+        if (log.questioning) weeklyData[weekKey].questioning.push(log.questioning);
+        if (log.empathy) weeklyData[weekKey].empathy.push(log.empathy);
+        if (log.closing) weeklyData[weekKey].closing.push(log.closing);
+      }
+
+      const avg = (arr: number[]) => arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : 0;
+
+      const trends = Object.entries(weeklyData)
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([week, data]) => ({
+          week,
+          avgScore: avg(data.scores),
+          avgListening: avg(data.listening),
+          avgQuestioning: avg(data.questioning),
+          avgEmpathy: avg(data.empathy),
+          avgClosing: avg(data.closing),
+          practiceCount: data.count,
+        }));
+
+      res.json(trends);
+    } catch (error) {
+      res.status(500).json({ message: "成長推移の取得に失敗しました" });
+    }
+  });
+
+  app.get("/api/notifications", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const notifications = await storage.getOrgNotifications(userId);
+      res.json(notifications);
+    } catch (error) {
+      res.status(500).json({ message: "通知の取得に失敗しました" });
+    }
+  });
+
+  app.patch("/api/notifications/:id/read", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const id = parseInt(req.params.id);
+      await storage.markNotificationRead(id, userId);
+      res.json({ success: true });
+    } catch (error) {
+      res.status(500).json({ message: "通知の既読化に失敗しました" });
     }
   });
 

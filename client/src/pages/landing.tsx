@@ -12,6 +12,12 @@ import {
   Zap,
   Shield,
   TrendingUp,
+  Building2,
+  Users,
+  ClipboardList,
+  Eye,
+  LineChart,
+  CheckCircle2,
 } from "lucide-react";
 
 const features = [
@@ -63,6 +69,48 @@ const stats = [
   { value: "10,000+", label: "アクティブユーザー" },
   { value: "85%", label: "スキルスコア向上率" },
   { value: "4.8", label: "ユーザー満足度" },
+];
+
+const enterpriseFeatures = [
+  {
+    icon: BarChart3,
+    title: "管理者ダッシュボード",
+    description: "メンバー全員のスキルスコア・練習回数・成長推移をリアルタイムで把握。データに基づいたチーム育成が可能です。",
+  },
+  {
+    icon: Users,
+    title: "メンバースコア管理",
+    description: "傾聴・質問・共感・クロージングの4軸でメンバーごとのスキルを可視化。強み・弱みを一目で把握できます。",
+  },
+  {
+    icon: ClipboardList,
+    title: "カリキュラム指定",
+    description: "週ごとに学習すべきスキルカードを指定。チーム全体で統一されたトレーニングプランを実行できます。",
+  },
+  {
+    icon: Eye,
+    title: "未実施者の即時把握",
+    description: "誰がカリキュラムを完了していないか一目でわかる。フォローアップが必要なメンバーを見逃しません。",
+  },
+  {
+    icon: LineChart,
+    title: "成長推移チャート",
+    description: "週次・月次でチームと個人のスコア変化を折れ線グラフで可視化。トレーニングの効果を定量的に測定。",
+  },
+  {
+    icon: CheckCircle2,
+    title: "履修率トラッキング",
+    description: "カリキュラムの達成率をプログレスバーで表示。チーム全体の学習進捗を一目で確認できます。",
+  },
+];
+
+const enterpriseBenefits = [
+  "誰がやっていないか一目でわかる",
+  "チーム全体のスキル底上げを実現",
+  "データに基づいた育成計画が立てられる",
+  "新人の早期戦力化をサポート",
+  "マネージャーの育成負荷を軽減",
+  "営業組織のパフォーマンスを可視化",
 ];
 
 export default function LandingPage() {
@@ -175,7 +223,73 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="py-16 md:py-24 bg-muted/30">
+        <section id="enterprise" className="py-16 md:py-24 bg-muted/30">
+          <div className="max-w-6xl mx-auto px-4">
+            <div className="text-center mb-12">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/10 text-violet-600 dark:text-violet-400 text-sm font-medium mb-4">
+                <Building2 className="w-3.5 h-3.5" />
+                法人・チーム向け
+              </div>
+              <h2 className="text-2xl md:text-3xl font-bold mb-3" data-testid="text-enterprise-title">
+                チームの営業力を、まとめて底上げ
+              </h2>
+              <p className="text-muted-foreground max-w-2xl mx-auto">
+                管理者ダッシュボードでメンバーの学習状況を一元管理。
+                カリキュラム指定とスコア分析で、組織全体の営業力を効率的に向上させます。
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mb-12">
+              {enterpriseFeatures.map((feature) => (
+                <Card
+                  key={feature.title}
+                  className="p-5 hover-elevate"
+                  data-testid={`card-enterprise-${feature.title}`}
+                >
+                  <div className="w-10 h-10 rounded-md bg-gradient-to-br from-violet-500/10 to-purple-500/10 dark:from-violet-500/20 dark:to-purple-500/20 flex items-center justify-center mb-4">
+                    <feature.icon className="w-5 h-5 text-violet-500" />
+                  </div>
+                  <h3 className="font-semibold text-base mb-2">{feature.title}</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">{feature.description}</p>
+                </Card>
+              ))}
+            </div>
+
+            <Card className="p-6 md:p-8" data-testid="card-enterprise-benefits">
+              <div className="flex flex-col md:flex-row gap-8 items-start">
+                <div className="flex-1">
+                  <h3 className="text-lg font-bold mb-2" data-testid="text-enterprise-benefits-title">
+                    法人導入のメリット
+                  </h3>
+                  <p className="text-sm text-muted-foreground mb-4">
+                    営業マネージャーの育成負担を減らしながら、チーム全体のパフォーマンスを向上させます。
+                  </p>
+                  <ul className="space-y-2.5">
+                    {enterpriseBenefits.map((benefit) => (
+                      <li key={benefit} className="flex items-center gap-2.5 text-sm" data-testid={`text-benefit-${benefit}`}>
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                        <span>{benefit}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+                <div className="flex flex-col items-center gap-3 md:items-end md:justify-center md:min-w-[200px]">
+                  <a href="/api/login">
+                    <Button size="lg" className="gap-2 text-base" data-testid="button-enterprise-cta">
+                      <Building2 className="w-4 h-4" />
+                      組織を作成する
+                    </Button>
+                  </a>
+                  <p className="text-xs text-muted-foreground text-center md:text-right">
+                    無料で組織を作成して、<br />チームメンバーを招待できます
+                  </p>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </section>
+
+        <section className="py-16 md:py-24">
           <div className="max-w-6xl mx-auto px-4 text-center">
             <div className="flex items-center justify-center gap-2 mb-4">
               <TrendingUp className="w-5 h-5 text-primary" />

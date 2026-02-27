@@ -1,12 +1,12 @@
 import { useLocation, Link } from "wouter";
-import { LayoutDashboard, BookOpen, MessageSquare, BarChart3, Calendar } from "lucide-react";
+import { LayoutDashboard, BookOpen, MessageSquare, BarChart3, Building2 } from "lucide-react";
 
 const navItems = [
   { path: "/", icon: LayoutDashboard, label: "Home" },
   { path: "/skills", icon: BookOpen, label: "Skills" },
   { path: "/roleplay", icon: MessageSquare, label: "RP" },
   { path: "/diagnosis", icon: BarChart3, label: "Diag" },
-  { path: "/calendar", icon: Calendar, label: "Cal" },
+  { path: "/org", icon: Building2, label: "Org" },
 ];
 
 export function BottomNav() {

@@ -22,9 +22,14 @@ import {
   CheckCircle2,
   Sparkles,
   ChevronRight,
+  Building2,
+  Settings,
+  Users,
+  ClipboardList,
 } from "lucide-react";
-import type { SkillDiagnosis, UserProgress, Subscription, SkillCard } from "@shared/schema";
+import type { SkillDiagnosis, UserProgress, Subscription, SkillCard, Organization, CurriculumAssignment } from "@shared/schema";
 import { UpgradeOverlay } from "@/components/upgrade-banner";
+import { NotificationBell } from "@/components/notifications";
 
 export default function Dashboard() {
   const { user, isLoading: authLoading, logout } = useAuth();
@@ -45,6 +50,16 @@ export default function Dashboard() {
   const { data: recommendations, isLoading: recsLoading } = useQuery<{ cards: SkillCard[]; reason: string }>({
     queryKey: ["/api/recommendations"],
     enabled: !!latestDiagnosis,
+  });
+
+  const { data: userOrgs, isLoading: orgsLoading } = useQuery<Organization[]>({
+    queryKey: ["/api/org"],
+  });
+
+  const firstOrgId = userOrgs?.[0]?.id;
+  const { data: curriculum, isLoading: curriculumLoading } = useQuery<(CurriculumAssignment & { skillCard?: SkillCard })[]>({
+    queryKey: ["/api/org", firstOrgId, "curriculum"],
+    enabled: !!firstOrgId,
   });
 
   const skillAxes = [
@@ -87,6 +102,7 @@ export default function Dashboard() {
             <span className="font-bold text-base">DealCoach</span>
           </div>
           <div className="flex items-center gap-1">
+            <NotificationBell />
             <ThemeToggle />
             <Button size="icon" variant="ghost" onClick={() => logout()} data-testid="button-logout">
               <LogOut className="w-4 h-4" />
@@ -232,6 +248,89 @@ export default function Dashboard() {
             </div>
           )}
         </Card>
+
+        {userOrgs && userOrgs.length > 0 && (
+          <Card className="p-4" data-testid="card-organizations">
+            <div className="flex items-center justify-between gap-4 mb-3">
+              <h2 className="font-semibold text-sm flex items-center gap-2">
+                <Building2 className="w-4 h-4 text-muted-foreground" />
+                所属組織
+              </h2>
+              <Link href="/org">
+                <Button variant="ghost" size="sm" className="text-xs gap-1" data-testid="button-view-orgs">
+                  一覧 <ArrowRight className="w-3 h-3" />
+                </Button>
+              </Link>
+            </div>
+            <div className="space-y-2">
+              {userOrgs.map((org) => (
+                <div
+                  key={org.id}
+                  className="flex items-center gap-3 p-2.5 rounded-md bg-muted/30"
+                  data-testid={`card-org-${org.id}`}
+                >
+                  <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <Building2 className="w-3.5 h-3.5 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">{org.name}</p>
+                  </div>
+                  <div className="flex items-center gap-1 flex-shrink-0">
+                    <Link href={`/org/${org.id}/dashboard`}>
+                      <Button size="icon" variant="ghost" data-testid={`button-org-dashboard-${org.id}`}>
+                        <Users className="w-3.5 h-3.5" />
+                      </Button>
+                    </Link>
+                    <Link href={`/org/${org.id}/settings`}>
+                      <Button size="icon" variant="ghost" data-testid={`button-org-settings-${org.id}`}>
+                        <Settings className="w-3.5 h-3.5" />
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        {firstOrgId && curriculum && curriculum.length > 0 && (
+          <Card className="p-4" data-testid="card-weekly-curriculum">
+            <div className="flex items-center justify-between gap-4 mb-3">
+              <h2 className="font-semibold text-sm flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-muted-foreground" />
+                今週のカリキュラム
+              </h2>
+              <Link href={`/org/${firstOrgId}/dashboard`}>
+                <Button variant="ghost" size="sm" className="text-xs gap-1" data-testid="button-view-curriculum">
+                  詳細 <ArrowRight className="w-3 h-3" />
+                </Button>
+              </Link>
+            </div>
+            <div className="space-y-2">
+              {curriculum.map((item) => (
+                <div
+                  key={item.id}
+                  className="flex items-center gap-2.5 p-2.5 rounded-md bg-muted/30 hover-elevate cursor-pointer"
+                  onClick={() => navigate("/skills")}
+                  data-testid={`curriculum-item-${item.id}`}
+                >
+                  <div className="w-8 h-8 rounded-md bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                    <Target className="w-3.5 h-3.5 text-amber-500" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium truncate">
+                      {(item as any).skillCard?.titleJa || `スキルカード #${item.skillCardId}`}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {item.weekStart ? new Date(item.weekStart).toLocaleDateString("ja-JP") : ""} 〜 {item.weekEnd ? new Date(item.weekEnd).toLocaleDateString("ja-JP") : ""}
+                    </p>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
 
         <Card className="p-4" data-testid="card-recent-activity">
           <h2 className="font-semibold text-sm mb-3 flex items-center gap-2">

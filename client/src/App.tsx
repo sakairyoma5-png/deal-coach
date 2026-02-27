@@ -13,6 +13,9 @@ import DiagnosisPage from "@/pages/diagnosis";
 import PricingPage from "@/pages/pricing";
 import CalendarPage from "@/pages/calendar";
 import ProfilePage from "@/pages/profile";
+import OrganizationPage from "@/pages/organization";
+import OrgSettingsPage from "@/pages/org-settings";
+import OrgDashboard from "@/pages/org-dashboard";
 import NotFound from "@/pages/not-found";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -26,6 +29,9 @@ function AuthenticatedRoutes() {
       <Route path="/pricing" component={PricingPage} />
       <Route path="/calendar" component={CalendarPage} />
       <Route path="/profile" component={ProfilePage} />
+      <Route path="/org" component={OrganizationPage} />
+      <Route path="/org/:id/settings" component={OrgSettingsPage} />
+      <Route path="/org/:id/dashboard" component={OrgDashboard} />
       <Route component={NotFound} />
     </Switch>
   );
