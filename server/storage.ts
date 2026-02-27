@@ -1,5 +1,6 @@
 import {
   subscriptions, skillCards, roleplayScenarios, roleplaySessions, skillDiagnoses, userProgress, userSkillProgress, skillCardStudyLogs, scheduledStudies,
+  organizations, organizationMembers, practiceLogs, curriculumAssignments, orgNotifications,
   type Subscription, type InsertSubscription,
   type SkillCard, type InsertSkillCard,
   type RoleplayScenario, type InsertRoleplayScenario,
@@ -9,9 +10,15 @@ import {
   type UserSkillProgress, type InsertUserSkillProgress,
   type SkillCardStudyLog,
   type ScheduledStudy,
+  type Organization, type InsertOrganization,
+  type OrganizationMember, type InsertOrganizationMember,
+  type PracticeLog, type InsertPracticeLog,
+  type CurriculumAssignment, type InsertCurriculumAssignment,
+  type OrgNotification, type InsertOrgNotification,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, and, sql, inArray, gte } from "drizzle-orm";
+import { eq, desc, and, sql, inArray, gte, lte } from "drizzle-orm";
+import { users } from "@shared/schema";
 
 export interface IStorage {
   getSubscription(userId: string): Promise<Subscription | undefined>;
@@ -59,6 +66,33 @@ export interface IStorage {
 
   updateSubscriptionByStripeCustomerId(stripeCustomerId: string, data: Partial<Subscription>): Promise<Subscription | undefined>;
   getSubscriptionByStripeCustomerId(stripeCustomerId: string): Promise<Subscription | undefined>;
+
+  createOrganization(data: InsertOrganization): Promise<Organization>;
+  getOrganization(id: number): Promise<Organization | undefined>;
+  getOrganizationByInviteCode(code: string): Promise<Organization | undefined>;
+  getUserOrganizations(userId: string): Promise<(Organization & { role: string })[]>;
+
+  addOrgMember(data: InsertOrganizationMember): Promise<OrganizationMember>;
+  getOrgMembers(orgId: number): Promise<(OrganizationMember & { displayName: string | null; email: string | null })[]>;
+  getOrgMemberRole(orgId: number, userId: string): Promise<string | null>;
+  removeOrgMember(orgId: number, userId: string): Promise<void>;
+  updateOrgMemberRole(orgId: number, userId: string, role: string): Promise<OrganizationMember | undefined>;
+
+  createPracticeLog(data: InsertPracticeLog): Promise<PracticeLog>;
+  getPracticeLogsByOrg(orgId: number, limit?: number): Promise<PracticeLog[]>;
+  getPracticeLogsByUser(userId: string, limit?: number): Promise<PracticeLog[]>;
+  getWeeklyPracticeStats(orgId: number, weekStart: string): Promise<{ userId: string; count: number; avgScore: number }[]>;
+
+  createCurriculumAssignment(data: InsertCurriculumAssignment): Promise<CurriculumAssignment>;
+  getCurriculumByOrg(orgId: number): Promise<CurriculumAssignment[]>;
+  getCurriculumByWeek(orgId: number, weekStart: string): Promise<CurriculumAssignment[]>;
+  deleteCurriculumAssignment(id: number, orgId: number): Promise<void>;
+
+  createOrgNotification(data: InsertOrgNotification): Promise<OrgNotification>;
+  getOrgNotifications(userId: string): Promise<OrgNotification[]>;
+  markNotificationRead(id: number, userId: string): Promise<void>;
+
+  getUserOrgId(userId: string): Promise<number | null>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -272,6 +306,160 @@ export class DatabaseStorage implements IStorage {
   async getSubscriptionByStripeCustomerId(stripeCustomerId: string): Promise<Subscription | undefined> {
     const [sub] = await db.select().from(subscriptions).where(eq(subscriptions.stripeCustomerId, stripeCustomerId));
     return sub;
+  }
+
+  async createOrganization(data: InsertOrganization): Promise<Organization> {
+    const [org] = await db.insert(organizations).values(data).returning();
+    return org;
+  }
+
+  async getOrganization(id: number): Promise<Organization | undefined> {
+    const [org] = await db.select().from(organizations).where(eq(organizations.id, id));
+    return org;
+  }
+
+  async getOrganizationByInviteCode(code: string): Promise<Organization | undefined> {
+    const [org] = await db.select().from(organizations).where(eq(organizations.inviteCode, code));
+    return org;
+  }
+
+  async getUserOrganizations(userId: string): Promise<(Organization & { role: string })[]> {
+    const memberships = await db.select().from(organizationMembers).where(eq(organizationMembers.userId, userId));
+    if (memberships.length === 0) return [];
+    const orgIds = memberships.map(m => m.orgId);
+    const orgs = await db.select().from(organizations).where(inArray(organizations.id, orgIds));
+    return orgs.map(org => {
+      const membership = memberships.find(m => m.orgId === org.id)!;
+      return { ...org, role: membership.role };
+    });
+  }
+
+  async addOrgMember(data: InsertOrganizationMember): Promise<OrganizationMember> {
+    const existing = await db.select().from(organizationMembers)
+      .where(and(eq(organizationMembers.orgId, data.orgId), eq(organizationMembers.userId, data.userId)));
+    if (existing.length > 0) return existing[0];
+    const [member] = await db.insert(organizationMembers).values(data).returning();
+    return member;
+  }
+
+  async getOrgMembers(orgId: number): Promise<(OrganizationMember & { displayName: string | null; email: string | null })[]> {
+    const members = await db.select().from(organizationMembers).where(eq(organizationMembers.orgId, orgId));
+    if (members.length === 0) return [];
+    const userIds = members.map(m => m.userId);
+    const userRows = await db.select().from(users).where(inArray(users.id, userIds));
+    return members.map(m => {
+      const user = userRows.find(u => u.id === m.userId);
+      return { ...m, displayName: user?.displayName || user?.firstName || null, email: user?.email || null };
+    });
+  }
+
+  async getOrgMemberRole(orgId: number, userId: string): Promise<string | null> {
+    const [member] = await db.select().from(organizationMembers)
+      .where(and(eq(organizationMembers.orgId, orgId), eq(organizationMembers.userId, userId)));
+    return member?.role || null;
+  }
+
+  async removeOrgMember(orgId: number, userId: string): Promise<void> {
+    await db.delete(organizationMembers)
+      .where(and(eq(organizationMembers.orgId, orgId), eq(organizationMembers.userId, userId)));
+  }
+
+  async updateOrgMemberRole(orgId: number, userId: string, role: string): Promise<OrganizationMember | undefined> {
+    const [member] = await db.update(organizationMembers).set({ role })
+      .where(and(eq(organizationMembers.orgId, orgId), eq(organizationMembers.userId, userId)))
+      .returning();
+    return member;
+  }
+
+  async createPracticeLog(data: InsertPracticeLog): Promise<PracticeLog> {
+    const [log] = await db.insert(practiceLogs).values(data).returning();
+    return log;
+  }
+
+  async getPracticeLogsByOrg(orgId: number, limit = 50): Promise<PracticeLog[]> {
+    return db.select().from(practiceLogs)
+      .where(eq(practiceLogs.orgId, orgId))
+      .orderBy(desc(practiceLogs.practicedAt))
+      .limit(limit);
+  }
+
+  async getPracticeLogsByUser(userId: string, limit = 50): Promise<PracticeLog[]> {
+    return db.select().from(practiceLogs)
+      .where(eq(practiceLogs.userId, userId))
+      .orderBy(desc(practiceLogs.practicedAt))
+      .limit(limit);
+  }
+
+  async getWeeklyPracticeStats(orgId: number, weekStart: string): Promise<{ userId: string; count: number; avgScore: number }[]> {
+    const weekStartDate = new Date(weekStart);
+    const weekEndDate = new Date(weekStart);
+    weekEndDate.setDate(weekEndDate.getDate() + 7);
+    const logs = await db.select().from(practiceLogs)
+      .where(and(
+        eq(practiceLogs.orgId, orgId),
+        gte(practiceLogs.practicedAt, weekStartDate),
+        lte(practiceLogs.practicedAt, weekEndDate),
+      ));
+    const statsMap = new Map<string, { count: number; totalScore: number }>();
+    for (const log of logs) {
+      const existing = statsMap.get(log.userId) || { count: 0, totalScore: 0 };
+      existing.count++;
+      existing.totalScore += log.score || 0;
+      statsMap.set(log.userId, existing);
+    }
+    return Array.from(statsMap.entries()).map(([userId, stats]) => ({
+      userId,
+      count: stats.count,
+      avgScore: stats.count > 0 ? Math.round(stats.totalScore / stats.count) : 0,
+    }));
+  }
+
+  async createCurriculumAssignment(data: InsertCurriculumAssignment): Promise<CurriculumAssignment> {
+    const [assignment] = await db.insert(curriculumAssignments).values(data).returning();
+    return assignment;
+  }
+
+  async getCurriculumByOrg(orgId: number): Promise<CurriculumAssignment[]> {
+    return db.select().from(curriculumAssignments)
+      .where(eq(curriculumAssignments.orgId, orgId))
+      .orderBy(desc(curriculumAssignments.createdAt));
+  }
+
+  async getCurriculumByWeek(orgId: number, weekStart: string): Promise<CurriculumAssignment[]> {
+    return db.select().from(curriculumAssignments)
+      .where(and(
+        eq(curriculumAssignments.orgId, orgId),
+        eq(curriculumAssignments.weekStart, weekStart),
+      ));
+  }
+
+  async deleteCurriculumAssignment(id: number, orgId: number): Promise<void> {
+    await db.delete(curriculumAssignments)
+      .where(and(eq(curriculumAssignments.id, id), eq(curriculumAssignments.orgId, orgId)));
+  }
+
+  async createOrgNotification(data: InsertOrgNotification): Promise<OrgNotification> {
+    const [notif] = await db.insert(orgNotifications).values(data).returning();
+    return notif;
+  }
+
+  async getOrgNotifications(userId: string): Promise<OrgNotification[]> {
+    return db.select().from(orgNotifications)
+      .where(eq(orgNotifications.userId, userId))
+      .orderBy(desc(orgNotifications.createdAt))
+      .limit(20);
+  }
+
+  async markNotificationRead(id: number, userId: string): Promise<void> {
+    await db.update(orgNotifications).set({ isRead: true })
+      .where(and(eq(orgNotifications.id, id), eq(orgNotifications.userId, userId)));
+  }
+
+  async getUserOrgId(userId: string): Promise<number | null> {
+    const [membership] = await db.select().from(organizationMembers)
+      .where(eq(organizationMembers.userId, userId))
+      .limit(1);
+    return membership?.orgId || null;
   }
 }
 

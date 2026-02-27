@@ -1,10 +1,10 @@
 # DealCoach - AI営業スキルトレーニングプラットフォーム
 
 ## Overview
-AI-powered sales skill training platform with roleplay practice, skill diagnosis, and structured learning content. Japanese-focused UI.
+AI-powered sales skill training platform with roleplay practice, skill diagnosis, structured learning content, and corporate/B2B organization management. Japanese-focused UI.
 
 ## Architecture
-- **Frontend**: React + Vite + TypeScript + Tailwind CSS + shadcn/ui
+- **Frontend**: React + Vite + TypeScript + Tailwind CSS + shadcn/ui + Recharts
 - **Backend**: Express.js + TypeScript
 - **Database**: PostgreSQL with Drizzle ORM + Stripe schema (managed by stripe-replit-sync)
 - **Auth**: Replit Auth (OIDC) - Google, GitHub, X, Apple, email/password
@@ -12,8 +12,8 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 - **Payments**: Stripe (via Replit connector, stripe-replit-sync for webhooks/data sync)
 
 ## Key Features
-1. Landing page (unauthenticated) with 6 feature cards
-2. Dashboard with skill scores, AI-powered recommendations, activity, calendar link
+1. Landing page (unauthenticated) with 6 feature cards + corporate/enterprise section
+2. Dashboard with skill scores, AI-powered recommendations, activity, org section, curriculum display
 3. Enriched skill card learning (50 cards, 6 categories) with per-user completion tracking
    - Rich content: whyEffective, mechanism, usageScenario, failurePatterns, checklist, successStory
    - Category filtering and search
@@ -26,14 +26,23 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 9. Pricing page (3 tiers: Free ¥0, Basic ¥3,000/月, Pro ¥4,500/月) - Stripe Checkout integration with monthly/annual billing
 10. Subscription management & cancellation via Stripe Customer Portal
 11. Learning calendar: monthly view showing study history + scheduled studies with add/delete
-12. Mobile-first design with bottom navigation (Home, Skills, RP, Diag, Cal)
+12. Mobile-first design with bottom navigation (Home, Skills, RP, Diag, Org)
 13. Dark/light mode toggle
+14. **Organization management** (corporate/B2B):
+    - Create organizations, invite members via invite code
+    - Admin/member roles
+    - Admin dashboard: member scores, weekly practice counts, non-participants, completion rates
+    - Practice log auto-recording (roleplay + skill card practice)
+    - Curriculum assignment by admin (weekly skill cards)
+    - Growth trend charts (weekly score changes, 4-axis breakdown)
+    - In-app notifications for curriculum assignments
+15. Profile page with display name editing
 
 ## Project Structure
-- `client/src/pages/` - Landing, Dashboard, Skills, Roleplay, Diagnosis, Pricing, Calendar
-- `client/src/components/` - ThemeProvider, ThemeToggle, BottomNav, UI components
-- `server/routes.ts` - All API endpoints
-- `server/storage.ts` - DatabaseStorage with Drizzle
+- `client/src/pages/` - Landing, Dashboard, Skills, Roleplay, Diagnosis, Pricing, Calendar, Profile, Organization, OrgSettings, OrgDashboard
+- `client/src/components/` - ThemeProvider, ThemeToggle, BottomNav, NotificationBell, UI components
+- `server/routes.ts` - All API endpoints (individual + organization)
+- `server/storage.ts` - DatabaseStorage with Drizzle (IStorage interface)
 - `server/stripeClient.ts` - Stripe client via Replit connector
 - `server/webhookHandlers.ts` - Stripe webhook processing
 - `server/seed.ts` - Seed orchestrator
@@ -52,34 +61,50 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 - `POST /api/roleplay/start` - Start roleplay session (mode: personality|custom + config + difficulty)
 - `POST /api/roleplay/custom-prepare` - AI pre-questioning for custom mode
 - `POST /api/roleplay/message` - Send message (SSE streaming)
-- `POST /api/roleplay/end` - End session, get diagnosis
+- `POST /api/roleplay/end` - End session, get diagnosis + auto-record practice log
 - `POST /api/feedback/start` - Start feedback chat (analyzes session, auto-generates skill cards)
 - `POST /api/feedback/chat` - Follow-up feedback conversation (SSE streaming)
 - `POST /api/skill-cards/:id/complete` - Mark skill card as completed by user
-- `POST /api/skill-cards/:id/practice/start` - Start chat-based practice (generates scenario + customer's first message)
-- `POST /api/skill-cards/:id/practice/message` - Send message in practice chat (AI responds as customer)
-- `POST /api/skill-cards/:id/practice/evaluate` - Evaluate full practice conversation with AI
+- `POST /api/skill-cards/:id/practice/start` - Start chat-based practice
+- `POST /api/skill-cards/:id/practice/message` - Send message in practice chat
+- `POST /api/skill-cards/:id/practice/evaluate` - Evaluate practice + auto-record practice log
 - `GET /api/skill-progress` - User's skill card completion progress
-- `GET /api/recommendations` - AI-powered skill card recommendations based on latest diagnosis
+- `GET /api/recommendations` - AI-powered recommendations
 - `GET /api/diagnosis/latest` - Latest skill diagnosis
 - `GET /api/diagnosis/history` - Diagnosis history
 - `GET /api/progress/recent` - Recent activity
-- `GET /api/study-logs/today` - Today's skill card study logs for current user
-- `GET /api/study-logs/recent?days=N` - Recent study logs (default 30 days)
-- `POST /api/study-logs` - Record a skill card study (body: { skillCardId })
+- `GET /api/study-logs/today` - Today's study logs
+- `GET /api/study-logs/recent?days=N` - Recent study logs
+- `POST /api/study-logs` - Record a skill card study
 - `GET /api/stripe/publishable-key` - Stripe publishable key
-- `GET /api/stripe/prices` - Dynamic price IDs from Stripe (by product metadata/name lookup)
-- `POST /api/stripe/checkout` - Create Stripe Checkout session (body: { priceId, plan, billingCycle })
-- `POST /api/stripe/portal` - Create Stripe Customer Portal session (for plan management/cancellation)
-- `POST /api/stripe/sync-subscription` - Sync subscription status from Stripe to local DB
-- `POST /api/stripe/webhook` - Stripe webhook endpoint (raw body, registered before express.json)
-- `GET /api/calendar/study-logs?month=YYYY-MM` - Study logs for a given month
-- `GET /api/calendar/scheduled?month=YYYY-MM` - Scheduled studies for a given month
-- `POST /api/calendar/schedule` - Add scheduled study (body: { skillCardId, scheduledDate })
-- `DELETE /api/calendar/schedule/:id` - Delete a scheduled study
+- `GET /api/stripe/prices` - Dynamic price IDs
+- `POST /api/stripe/checkout` - Create Checkout session
+- `POST /api/stripe/portal` - Create Customer Portal session
+- `POST /api/stripe/sync-subscription` - Sync subscription from Stripe
+- `POST /api/stripe/webhook` - Stripe webhook
+- `GET /api/calendar/study-logs?month=YYYY-MM` - Study logs for month
+- `GET /api/calendar/scheduled?month=YYYY-MM` - Scheduled studies for month
+- `POST /api/calendar/schedule` - Add scheduled study
+- `DELETE /api/calendar/schedule/:id` - Delete scheduled study
+- `POST /api/org` - Create organization
+- `GET /api/org` - User's organizations
+- `GET /api/org/:id` - Organization detail
+- `POST /api/org/:id/invite` - Get invite code (admin only)
+- `POST /api/org/join/:code` - Join via invite code
+- `GET /api/org/:id/members` - Member list
+- `PATCH /api/org/:id/members/:userId` - Change member role (admin only)
+- `DELETE /api/org/:id/members/:userId` - Remove member (admin only)
+- `GET /api/org/:id/dashboard` - Admin dashboard data
+- `GET /api/org/:id/practice-logs` - Practice logs with member/skill names
+- `POST /api/org/:id/curriculum` - Assign curriculum (admin only)
+- `GET /api/org/:id/curriculum` - Get curriculum (?weekStart for specific week)
+- `DELETE /api/org/:id/curriculum/:assignmentId` - Delete curriculum (admin only)
+- `GET /api/org/:id/trends` - Growth trends (weekly scores, 4-axis)
+- `GET /api/notifications` - User notifications
+- `PATCH /api/notifications/:id/read` - Mark notification read
 
 ## Database Tables
-users, sessions (auth), subscriptions (with stripeCustomerId, stripeSubscriptionId), skill_cards (with isAiGenerated, sourceSessionId), roleplay_scenarios, roleplay_sessions (with feedbackChatMessages), skill_diagnoses, user_progress, user_skill_progress, skill_card_study_logs, scheduled_studies, conversations, messages
+users, sessions (auth), subscriptions, skill_cards, roleplay_scenarios, roleplay_sessions, skill_diagnoses, user_progress, user_skill_progress, skill_card_study_logs, scheduled_studies, conversations, messages, **organizations**, **organization_members**, **practice_logs**, **curriculum_assignments**, **org_notifications**
 
 ## Stripe Integration
 - Products created via Stripe API (seed-stripe.ts): DealCoach Basic, DealCoach Pro
@@ -99,6 +124,15 @@ users, sessions (auth), subscriptions (with stripeCustomerId, stripeSubscription
 - Basic/Pro: 制限なし、確認ダイアログなし、学習記録は同様に蓄積
 - Roleplay AI evaluation includes recent study history (14 days) for contextualized feedback
 
+## Corporate/Organization System
+- Organizations: create with name, auto-generate invite code
+- Members: join via invite code, roles (admin/member)
+- Practice logs: auto-recorded on roleplay end + skill card practice evaluate, includes orgId if user belongs to org
+- Admin dashboard: member scores (overall + 4-axis), weekly practice counts, non-participants list, completion rates, curriculum progress
+- Curriculum: admin assigns skill cards per week, notifications sent to members, progress tracked
+- Growth trends: weekly/monthly score charts with 4-axis breakdown (recharts LineChart + RadarChart)
+- Notifications: in-app bell icon with unread count, curriculum assignment notifications
+
 ## Dev Commands
 - `npm run dev` - Start dev server
 - `npm run db:push` - Push schema changes
@@ -107,7 +141,7 @@ users, sessions (auth), subscriptions (with stripeCustomerId, stripeSubscription
 ## User Preferences
 - Japanese UI language
 - Mobile-first responsive design
-- Instagram-style bottom navigation
+- Instagram-style bottom navigation (Home, Skills, RP, Diag, Org)
 - Skill cards are global/shared; user progress (履修済み) tracked per-user in user_skill_progress
 - Recommendations show relevant cards even if already completed
 - AI auto-generates skill cards without asking permission

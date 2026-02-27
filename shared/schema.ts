@@ -130,6 +130,74 @@ export const scheduledStudies = pgTable("scheduled_studies", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+export const organizations = pgTable("organizations", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  createdBy: varchar("created_by").notNull(),
+  inviteCode: text("invite_code").notNull().unique(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const organizationMembers = pgTable("organization_members", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  role: text("role").notNull().default("member"),
+  joinedAt: timestamp("joined_at").defaultNow(),
+});
+
+export const practiceLogs = pgTable("practice_logs", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id"),
+  userId: varchar("user_id").notNull(),
+  skillCardId: integer("skill_card_id"),
+  sessionId: integer("session_id"),
+  score: integer("score"),
+  listening: integer("listening"),
+  questioning: integer("questioning"),
+  empathy: integer("empathy"),
+  closing: integer("closing"),
+  practiceType: text("practice_type").notNull().default("roleplay"),
+  practicedAt: timestamp("practiced_at").defaultNow(),
+});
+
+export const curriculumAssignments = pgTable("curriculum_assignments", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull(),
+  skillCardId: integer("skill_card_id").notNull(),
+  assignedBy: varchar("assigned_by").notNull(),
+  weekStart: text("week_start").notNull(),
+  weekEnd: text("week_end").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const orgNotifications = pgTable("org_notifications", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull(),
+  userId: varchar("user_id").notNull(),
+  type: text("type").notNull(),
+  message: text("message").notNull(),
+  isRead: boolean("is_read").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertOrganizationSchema = createInsertSchema(organizations).omit({ id: true, createdAt: true });
+export const insertOrganizationMemberSchema = createInsertSchema(organizationMembers).omit({ id: true, joinedAt: true });
+export const insertPracticeLogSchema = createInsertSchema(practiceLogs).omit({ id: true, practicedAt: true });
+export const insertCurriculumAssignmentSchema = createInsertSchema(curriculumAssignments).omit({ id: true, createdAt: true });
+export const insertOrgNotificationSchema = createInsertSchema(orgNotifications).omit({ id: true, createdAt: true });
+
+export type Organization = typeof organizations.$inferSelect;
+export type InsertOrganization = z.infer<typeof insertOrganizationSchema>;
+export type OrganizationMember = typeof organizationMembers.$inferSelect;
+export type InsertOrganizationMember = z.infer<typeof insertOrganizationMemberSchema>;
+export type PracticeLog = typeof practiceLogs.$inferSelect;
+export type InsertPracticeLog = z.infer<typeof insertPracticeLogSchema>;
+export type CurriculumAssignment = typeof curriculumAssignments.$inferSelect;
+export type InsertCurriculumAssignment = z.infer<typeof insertCurriculumAssignmentSchema>;
+export type OrgNotification = typeof orgNotifications.$inferSelect;
+export type InsertOrgNotification = z.infer<typeof insertOrgNotificationSchema>;
+
 export const insertSubscriptionSchema = createInsertSchema(subscriptions).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertSkillCardSchema = createInsertSchema(skillCards).omit({ id: true, createdAt: true });
 export const insertRoleplayScenarioSchema = createInsertSchema(roleplayScenarios).omit({ id: true, createdAt: true });
