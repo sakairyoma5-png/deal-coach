@@ -65,11 +65,6 @@ const features = [
   },
 ];
 
-const stats = [
-  { value: "10,000+", label: "アクティブユーザー" },
-  { value: "85%", label: "スキルスコア向上率" },
-  { value: "4.8", label: "ユーザー満足度" },
-];
 
 const enterpriseFeatures = [
   {
@@ -182,18 +177,6 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="py-12 border-y border-border bg-muted/30">
-          <div className="max-w-6xl mx-auto px-4">
-            <div className="grid grid-cols-3 gap-6">
-              {stats.map((stat) => (
-                <div key={stat.label} className="text-center">
-                  <div className="text-2xl md:text-3xl font-bold text-foreground">{stat.value}</div>
-                  <div className="text-xs md:text-sm text-muted-foreground mt-1">{stat.label}</div>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
 
         <section id="features" className="py-16 md:py-24">
           <div className="max-w-6xl mx-auto px-4">
