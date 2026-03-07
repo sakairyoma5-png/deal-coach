@@ -256,7 +256,7 @@ export default function LandingPage() {
                     ))}
                   </ul>
                 </div>
-                <div className="flex flex-col items-center gap-3 md:items-end md:justify-center md:min-w-[200px]">
+                <div className="flex flex-col items-center gap-3 w-full md:w-auto md:items-end md:justify-center md:min-w-[200px]">
                   <a href="/api/login">
                     <Button size="lg" className="gap-2 text-base" data-testid="button-enterprise-cta">
                       <Building2 className="w-4 h-4" />
