@@ -14,6 +14,17 @@ export function registerAuthRoutes(app: Express): void {
     }
   });
 
+  app.patch("/api/auth/accept-tos", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const user = await authStorage.acceptTos(userId);
+      res.json(user);
+    } catch (error) {
+      console.error("Error accepting ToS:", error);
+      res.status(500).json({ message: "利用規約の同意に失敗しました" });
+    }
+  });
+
   app.patch("/api/auth/profile", isAuthenticated, async (req: any, res) => {
     try {
       const userId = req.user.claims.sub;

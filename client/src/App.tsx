@@ -16,6 +16,9 @@ import ProfilePage from "@/pages/profile";
 import OrganizationPage from "@/pages/organization";
 import OrgSettingsPage from "@/pages/org-settings";
 import OrgDashboard from "@/pages/org-dashboard";
+import LegalPage from "@/pages/legal";
+import TermsPage from "@/pages/terms";
+import TosConsentPage from "@/pages/tos-consent";
 import NotFound from "@/pages/not-found";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -32,6 +35,8 @@ function AuthenticatedRoutes() {
       <Route path="/org" component={OrganizationPage} />
       <Route path="/org/:id/settings" component={OrgSettingsPage} />
       <Route path="/org/:id/dashboard" component={OrgDashboard} />
+      <Route path="/legal" component={LegalPage} />
+      <Route path="/terms" component={TermsPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -41,6 +46,8 @@ function UnauthenticatedRoutes() {
   return (
     <Switch>
       <Route path="/pricing" component={PricingPage} />
+      <Route path="/legal" component={LegalPage} />
+      <Route path="/terms" component={TermsPage} />
       <Route component={LandingPage} />
     </Switch>
   );
@@ -63,6 +70,16 @@ function AppContent() {
 
   if (!user) {
     return <UnauthenticatedRoutes />;
+  }
+
+  if (!user.tosAccepted) {
+    return (
+      <Switch>
+        <Route path="/terms" component={TermsPage} />
+        <Route path="/legal" component={LegalPage} />
+        <Route component={TosConsentPage} />
+      </Switch>
+    );
   }
 
   return <AuthenticatedRoutes />;

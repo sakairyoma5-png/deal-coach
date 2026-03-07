@@ -311,14 +311,24 @@ export default function LandingPage() {
         </section>
 
         <footer className="py-8 border-t border-border">
-          <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
-                <Zap className="w-3 h-3 text-primary-foreground" />
+          <div className="max-w-6xl mx-auto px-4">
+            <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center">
+                  <Zap className="w-3 h-3 text-primary-foreground" />
+                </div>
+                <span className="font-semibold text-sm">DealCoach</span>
               </div>
-              <span className="font-semibold text-sm">DealCoach</span>
+              <div className="flex items-center gap-4">
+                <a href="/terms" className="text-xs text-muted-foreground hover:text-foreground transition-colors" data-testid="link-footer-terms">
+                  利用規約
+                </a>
+                <a href="/legal" className="text-xs text-muted-foreground hover:text-foreground transition-colors" data-testid="link-footer-legal">
+                  特定商取引法に基づく表記
+                </a>
+              </div>
             </div>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-xs text-muted-foreground text-center mt-4">
               &copy; 2026 DealCoach. All rights reserved.
             </p>
           </div>

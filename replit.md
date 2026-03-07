@@ -28,7 +28,13 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 11. Learning calendar: monthly view showing study history + scheduled studies with add/delete
 12. Mobile-first design with bottom navigation (Home, Skills, RP, Diag, Org)
 13. Dark/light mode toggle
-14. **Organization management** (corporate/B2B):
+14. **Legal compliance**:
+    - Terms of Service page (/terms) - Japanese SaaS terms
+    - 特定商取引法に基づく表記 page (/legal) - legal business info
+    - ToS consent gate: login → must agree to ToS before accessing any feature
+    - tosAccepted + tosAcceptedAt tracked per user in DB
+    - Footer links on landing page to /terms and /legal
+15. **Organization management** (corporate/B2B):
     - Create organizations, invite members via invite code
     - Admin/member roles
     - Admin dashboard: member scores, weekly practice counts, non-participants, completion rates
@@ -39,7 +45,7 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 15. Profile page with display name editing
 
 ## Project Structure
-- `client/src/pages/` - Landing, Dashboard, Skills, Roleplay, Diagnosis, Pricing, Calendar, Profile, Organization, OrgSettings, OrgDashboard
+- `client/src/pages/` - Landing, Dashboard, Skills, Roleplay, Diagnosis, Pricing, Calendar, Profile, Organization, OrgSettings, OrgDashboard, Terms, Legal, TosConsent
 - `client/src/components/` - ThemeProvider, ThemeToggle, BottomNav, NotificationBell, UI components
 - `server/routes.ts` - All API endpoints (individual + organization)
 - `server/storage.ts` - DatabaseStorage with Drizzle (IStorage interface)
@@ -54,6 +60,7 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 
 ## API Endpoints
 - `GET /api/auth/user` - Current user (includes displayName)
+- `PATCH /api/auth/accept-tos` - Accept Terms of Service (sets tosAccepted=true)
 - `PATCH /api/auth/profile` - Update display name (body: { displayName })
 - `GET /api/subscription` - User subscription
 - `GET /api/skill-cards` - All skill cards
