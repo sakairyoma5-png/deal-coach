@@ -6,7 +6,7 @@ import { Link } from "wouter";
 
 const legalItems = [
   { label: "販売業者（法人名）", value: "Core practice" },
-  { label: "運営責任者", value: "酒井 亮馬" },
+  { label: "運営責任者", value: "小路 琉生" },
   { label: "所在地", value: "〒150-0021 東京都渋谷区恵比寿西2丁目4番8号 ウィンド恵比寿ビル8F" },
   { label: "電話番号", value: "09053047978" },
   { label: "メールアドレス", value: "corepractice.official@gmail.com" },
