@@ -5,19 +5,21 @@ import { Zap, ArrowLeft } from "lucide-react";
 import { Link } from "wouter";
 
 const legalItems = [
-  { label: "販売業者", value: "Core practice" },
-  { label: "代表者", value: "酒井 亮馬" },
+  { label: "販売業者（法人名）", value: "Core practice" },
+  { label: "運営責任者", value: "酒井 亮馬" },
   { label: "所在地", value: "〒150-0021 東京都渋谷区恵比寿西2丁目4番8号 ウィンド恵比寿ビル8F" },
   { label: "電話番号", value: "09053047978" },
   { label: "メールアドレス", value: "corepractice.official@gmail.com" },
-  { label: "販売価格", value: "各プランのページに表示された価格（税込）" },
-  { label: "支払方法", value: "クレジットカード" },
-  { label: "サービス提供時期", value: "決済完了後、直ちに利用可能" },
+  { label: "追加手数料", value: "なし" },
   {
-    label: "返品・キャンセル",
+    label: "交換および返品に関するポリシー",
     value:
-      "サブスクリプションはいつでも解約可能。解約後も当該請求期間終了まで利用可能。返金は原則不可。",
+      "サブスクリプションはいつでも解約可能です。解約後も当該請求期間終了までサービスをご利用いただけます。デジタルサービスの性質上、返金は原則としてお受けしておりません。",
   },
+  { label: "サービス提供時期", value: "決済完了後、直ちにご利用いただけます" },
+  { label: "利用可能な決済手段", value: "クレジットカード" },
+  { label: "決済期間", value: "クレジットカード決済はただちに処理されます" },
+  { label: "販売価格", value: "各プランのページに表示された金額（消費税込）" },
 ];
 
 export default function LegalPage() {
