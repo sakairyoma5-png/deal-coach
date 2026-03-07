@@ -152,7 +152,7 @@ export default function TermsPage() {
             </section>
 
             <p className="text-muted-foreground pt-4 border-t border-border">
-              制定日：2025年1月1日
+              制定日：2026年3月7日
             </p>
           </div>
         </Card>
