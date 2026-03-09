@@ -188,8 +188,7 @@ ${customDifficultyInstructions[customDifficulty] || customDifficultyInstructions
       const initialResponse = await openai.chat.completions.create({
         model: "gpt-5-nano",
         messages: [
-          { role: "system", content: systemMessage },
-          { role: "user", content: "商談を開始してください。顧客として最初の挨拶をしてください。" },
+          { role: "user", content: `${systemMessage}\n\n---\n\n商談を開始してください。顧客として最初の挨拶をしてください。` },
         ],
         max_completion_tokens: 512,
       });
@@ -277,9 +276,11 @@ ${customDifficultyInstructions[customDifficulty] || customDifficultyInstructions
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
+      const streamMsgs = msgs.map((m: any) => m.role === "system" ? { role: "user", content: m.content } : m);
+
       const stream = await openai.chat.completions.create({
         model: "gpt-5-nano",
-        messages: msgs,
+        messages: streamMsgs,
         stream: true,
         max_completion_tokens: 512,
       });
@@ -647,9 +648,11 @@ ${studyContext}
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
+      const streamChatMsgs = chatMessages.map((m: any) => m.role === "system" ? { role: "user", content: m.content } : m);
+
       const stream = await openai.chat.completions.create({
         model: "gpt-5-nano",
-        messages: chatMessages,
+        messages: streamChatMsgs,
         stream: true,
         max_completion_tokens: 1536,
       });

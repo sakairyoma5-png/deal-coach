@@ -151,6 +151,13 @@ users, sessions (auth), subscriptions, skill_cards, roleplay_scenarios, roleplay
 - Growth trends: weekly/monthly score charts with 4-axis breakdown (recharts LineChart + RadarChart)
 - Notifications: in-app bell icon with unread count, curriculum assignment notifications
 
+## AI Model Constraints (gpt-5-nano)
+- NEVER use `role: "system"` messages — returns empty content in both streaming and json_object modes
+- NEVER use `response_format: { type: "json_object" }` for complex/long prompts — returns empty `{}`
+- Instead: merge system instructions into the user message, and parse JSON manually from response text
+- For streaming: map system messages to user messages before sending to OpenAI
+- For JSON responses: use regex `rawText.match(/\{[\s\S]*\}/)` to extract JSON from free-form response
+
 ## Dev Commands
 - `npm run dev` - Start dev server
 - `npm run db:push` - Push schema changes
