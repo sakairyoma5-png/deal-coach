@@ -448,7 +448,7 @@ function SkillCardDetail({
                     </div>
                   </div>
 
-                  <p className="text-xs font-medium text-foreground">営業としてどう応答しますか？</p>
+                  <p className="text-xs font-medium text-foreground">営業としてどう対応しますか？</p>
 
                   <div className="space-y-2" data-testid="section-quiz-choices">
                     {currentQuestion.choices.map((choice, i) => {
