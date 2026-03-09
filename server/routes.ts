@@ -284,11 +284,20 @@ ${customDifficultyInstructions[customDifficulty] || customDifficultyInstructions
 
       const singlePrompt = `${systemMsg?.content || ""}\n\n---\n以下はこれまでの商談の会話です。顧客として次の応答を書いてください。2-4文程度で応答してください。\n\n${conversationLines}\n\n顧客:`;
 
+      console.log(`[roleplay/message] prompt length=${singlePrompt.length} msgs count=${msgs.length}`);
+
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
         messages: [{ role: "user", content: singlePrompt }],
         max_completion_tokens: 512,
       });
+
+      console.log(`[roleplay/message] raw response:`, JSON.stringify({
+        finish_reason: response.choices[0]?.finish_reason,
+        content: response.choices[0]?.message?.content,
+        role: response.choices[0]?.message?.role,
+        usage: response.usage,
+      }));
 
       const fullResponse = response.choices[0]?.message?.content || "";
       console.log(`[roleplay/message] sessionId=${sessionId} response length=${fullResponse.length} preview="${fullResponse.slice(0, 100)}"`);
