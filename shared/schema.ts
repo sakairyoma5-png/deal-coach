@@ -135,6 +135,9 @@ export const organizations = pgTable("organizations", {
   name: text("name").notNull(),
   createdBy: varchar("created_by").notNull(),
   inviteCode: text("invite_code").notNull().unique(),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  subscriptionStatus: text("subscription_status"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

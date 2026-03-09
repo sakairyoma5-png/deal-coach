@@ -20,6 +20,7 @@ import LegalPage from "@/pages/legal";
 import TermsPage from "@/pages/terms";
 import TosConsentPage from "@/pages/tos-consent";
 import GuidePage from "@/pages/guide";
+import PrivacyPage from "@/pages/privacy";
 import NotFound from "@/pages/not-found";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -39,6 +40,7 @@ function AuthenticatedRoutes() {
       <Route path="/legal" component={LegalPage} />
       <Route path="/terms" component={TermsPage} />
       <Route path="/guide" component={GuidePage} />
+      <Route path="/privacy" component={PrivacyPage} />
       <Route component={NotFound} />
     </Switch>
   );
@@ -51,6 +53,7 @@ function UnauthenticatedRoutes() {
       <Route path="/legal" component={LegalPage} />
       <Route path="/terms" component={TermsPage} />
       <Route path="/guide" component={GuidePage} />
+      <Route path="/privacy" component={PrivacyPage} />
       <Route component={LandingPage} />
     </Switch>
   );
@@ -81,6 +84,7 @@ function AppContent() {
         <Route path="/terms" component={TermsPage} />
         <Route path="/legal" component={LegalPage} />
         <Route path="/guide" component={GuidePage} />
+        <Route path="/privacy" component={PrivacyPage} />
         <Route component={TosConsentPage} />
       </Switch>
     );

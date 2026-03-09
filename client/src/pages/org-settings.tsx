@@ -3,17 +3,9 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Input } from "@/components/ui/input";
 import { BottomNav } from "@/components/bottom-nav";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -32,11 +24,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Link, useParams, useLocation } from "wouter";
+import { Link, useParams, useLocation, useSearch } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   ArrowLeft,
   Copy,
@@ -45,8 +37,10 @@ import {
   UserMinus,
   Shield,
   Users,
-  LinkIcon,
   BarChart3,
+  CreditCard,
+  AlertCircle,
+  CheckCircle2,
 } from "lucide-react";
 import type { Organization, OrganizationMember } from "@shared/schema";
 
@@ -56,8 +50,10 @@ export default function OrgSettingsPage() {
   const { user } = useAuth();
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
+  const search = useSearch();
   const { toast } = useToast();
   const [copied, setCopied] = useState(false);
+  const syncedRef = useRef(false);
 
   const orgId = parseInt(id || "0");
 
@@ -70,6 +66,23 @@ export default function OrgSettingsPage() {
     queryKey: ["/api/org", orgId, "members"],
     enabled: orgId > 0,
   });
+
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    if (params.get("checkout") === "success" && params.get("session_id") && !syncedRef.current) {
+      syncedRef.current = true;
+      const sessionId = params.get("session_id");
+      apiRequest("POST", `/api/org/${orgId}/checkout-success`, { sessionId })
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: ["/api/org", orgId] });
+          toast({ title: "法人プランの契約が完了しました" });
+        })
+        .catch((err) => {
+          console.error("Checkout sync error:", err);
+          toast({ title: "決済の確認に失敗しました", variant: "destructive" });
+        });
+    }
+  }, [search, orgId]);
 
   const isAdmin = org?.role === "admin";
 
@@ -114,6 +127,7 @@ export default function OrgSettingsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/org", orgId, "members"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/org", orgId] });
       toast({ title: "メンバーを削除しました" });
     },
     onError: (error: Error) => {
@@ -165,6 +179,9 @@ export default function OrgSettingsPage() {
     );
   }
 
+  const memberCount = members?.length || 0;
+  const monthlyCost = memberCount * 10000;
+
   return (
     <div className="min-h-screen bg-background pb-20">
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border">
@@ -183,18 +200,72 @@ export default function OrgSettingsPage() {
       </header>
 
       <main className="max-w-lg mx-auto px-4 py-5 space-y-5">
+        <Card className="p-4" data-testid="card-subscription-status">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-sm flex items-center gap-2">
+              <CreditCard className="w-4 h-4 text-muted-foreground" />
+              サブスクリプション
+            </h2>
+            {org.subscriptionStatus === "active" ? (
+              <Badge variant="default" className="bg-emerald-500 text-[10px]">
+                <CheckCircle2 className="w-3 h-3 mr-1" />
+                契約中
+              </Badge>
+            ) : org.subscriptionStatus === "canceled" ? (
+              <Badge variant="secondary" className="text-[10px]">解約済み</Badge>
+            ) : (
+              <Badge variant="outline" className="text-[10px]">
+                <AlertCircle className="w-3 h-3 mr-1" />
+                未契約
+              </Badge>
+            )}
+          </div>
+          {org.subscriptionStatus === "active" ? (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">プラン</span>
+                <span className="font-medium">Enterprise（法人）</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">アカウント数</span>
+                <span className="font-medium">{memberCount}名</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">月額料金</span>
+                <span className="font-medium">¥{monthlyCost.toLocaleString()}/月</span>
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-2">
+                ¥10,000/アカウント/月 × {memberCount}名。メンバー追加・削除時に自動で調整されます。
+              </p>
+            </div>
+          ) : (
+            <div className="text-center py-2">
+              <p className="text-sm text-muted-foreground mb-2">
+                法人プランが未契約です。招待やカリキュラム管理を行うには契約が必要です。
+              </p>
+            </div>
+          )}
+        </Card>
+
         {isAdmin && (
           <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              variant="outline"
-              className="gap-2"
-              onClick={() => inviteMutation.mutate()}
-              disabled={inviteMutation.isPending}
-              data-testid="button-copy-invite"
-            >
-              {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              {copied ? "コピーしました" : "招待リンクをコピー"}
-            </Button>
+            {org.subscriptionStatus === "active" ? (
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={() => inviteMutation.mutate()}
+                disabled={inviteMutation.isPending}
+                data-testid="button-copy-invite"
+              >
+                {copied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+                {copied ? "コピーしました" : "招待リンクをコピー"}
+              </Button>
+            ) : (
+              <Button variant="outline" className="gap-2" disabled data-testid="button-copy-invite-disabled">
+                <Copy className="w-4 h-4" />
+                招待（未契約）
+              </Button>
+            )}
             <Link href={`/org/${orgId}/dashboard`}>
               <Button variant="outline" className="gap-2" data-testid="button-go-dashboard">
                 <BarChart3 className="w-4 h-4" />
@@ -208,7 +279,7 @@ export default function OrgSettingsPage() {
           <div className="flex items-center justify-between gap-4 mb-4">
             <h2 className="font-semibold text-sm flex items-center gap-2">
               <Users className="w-4 h-4 text-muted-foreground" />
-              メンバー ({members?.length || 0})
+              メンバー ({memberCount})
             </h2>
           </div>
 
@@ -275,6 +346,7 @@ export default function OrgSettingsPage() {
                               <AlertDialogTitle>メンバーを削除</AlertDialogTitle>
                               <AlertDialogDescription>
                                 このメンバーを組織から削除してもよろしいですか？
+                                {org.subscriptionStatus === "active" && " サブスクリプションのアカウント数が1つ減少します。"}
                               </AlertDialogDescription>
                             </AlertDialogHeader>
                             <AlertDialogFooter>

@@ -18,6 +18,7 @@ import {
   LineChart,
   ArrowRight,
   CheckCircle2,
+  Crown,
 } from "lucide-react";
 
 const personalSteps = [
@@ -28,6 +29,8 @@ const personalSteps = [
     description: "Googleアカウント、GitHub、メールアドレスなどで簡単に登録できます。クレジットカードは不要です。",
     color: "text-blue-500",
     bg: "from-blue-500/10 to-cyan-500/10 dark:from-blue-500/20 dark:to-cyan-500/20",
+    screenshot: "/guide/landing.png",
+    screenshotAlt: "DealCoachのランディングページ",
   },
   {
     step: 2,
@@ -36,6 +39,8 @@ const personalSteps = [
     description: "SPIN営業、ミラーリング、クロージングなど50枚以上のスキルカードを6つのカテゴリから選んで学習。良い例・悪い例、チェックリスト付きで実践的に理解できます。",
     color: "text-emerald-500",
     bg: "from-emerald-500/10 to-green-500/10 dark:from-emerald-500/20 dark:to-green-500/20",
+    screenshot: null,
+    screenshotAlt: "",
   },
   {
     step: 3,
@@ -44,6 +49,8 @@ const personalSteps = [
     description: "6つの性格タイプ × 3段階の難易度から顧客を選んで、リアルな商談シミュレーション。自由にシナリオを設定するカスタムモードも利用できます。",
     color: "text-violet-500",
     bg: "from-violet-500/10 to-purple-500/10 dark:from-violet-500/20 dark:to-purple-500/20",
+    screenshot: null,
+    screenshotAlt: "",
   },
   {
     step: 4,
@@ -52,6 +59,8 @@ const personalSteps = [
     description: "ロールプレイ終了後、AIコーチが会話内容を分析。強み・改善点を具体的にフィードバック。質問しながら深く理解できます。",
     color: "text-amber-500",
     bg: "from-amber-500/10 to-orange-500/10 dark:from-amber-500/20 dark:to-orange-500/20",
+    screenshot: null,
+    screenshotAlt: "",
   },
   {
     step: 5,
@@ -60,6 +69,8 @@ const personalSteps = [
     description: "傾聴力・質問力・共感力・クロージング力の4軸で営業スキルを診断。練習を重ねるごとにスコアが更新され、成長を実感できます。",
     color: "text-rose-500",
     bg: "from-rose-500/10 to-pink-500/10 dark:from-rose-500/20 dark:to-pink-500/20",
+    screenshot: null,
+    screenshotAlt: "",
   },
   {
     step: 6,
@@ -68,6 +79,8 @@ const personalSteps = [
     description: "学習した日が自動で記録され、カレンダー上で確認できます。学習予定を登録して、計画的にスキルアップしましょう。",
     color: "text-sky-500",
     bg: "from-sky-500/10 to-indigo-500/10 dark:from-sky-500/20 dark:to-indigo-500/20",
+    screenshot: null,
+    screenshotAlt: "",
   },
 ];
 
@@ -76,7 +89,7 @@ const corporateSteps = [
     step: 1,
     icon: Building2,
     title: "組織を作成する",
-    description: "アカウント登録後、「組織」タブから組織名を入力するだけで作成完了。管理者として自動的に登録されます。",
+    description: "アカウント登録後、「組織」タブから組織名を入力して作成。法人プラン（¥10,000/アカウント/月）の決済完了後、管理者として組織が有効化されます。",
     color: "text-violet-500",
     bg: "from-violet-500/10 to-purple-500/10 dark:from-violet-500/20 dark:to-purple-500/20",
   },
@@ -84,7 +97,7 @@ const corporateSteps = [
     step: 2,
     icon: Users,
     title: "招待コードでメンバーを招待",
-    description: "組織設定から招待コードを取得し、チームメンバーに共有。メンバーは招待コードを入力するだけで参加できます。",
+    description: "組織設定から招待コードを取得し、チームメンバーに共有。メンバーが参加すると自動的にアカウント分の課金（¥10,000/月）が追加されます。",
     color: "text-blue-500",
     bg: "from-blue-500/10 to-cyan-500/10 dark:from-blue-500/20 dark:to-cyan-500/20",
   },
@@ -114,26 +127,58 @@ const corporateSteps = [
   },
 ];
 
-const plans = [
+const personalPlans = [
   {
     name: "Free",
     price: "¥0",
-    features: ["スキルカード学習（1日3枚まで）", "AIロールプレイ", "スキル診断", "組織作成・参加"],
+    features: ["スキルカード学習（1日3枚まで）", "AIロールプレイ", "スキル診断", "組織参加"],
   },
   {
     name: "Basic",
     price: "¥3,000/月",
-    features: ["スキルカード無制限", "AIロールプレイ", "スキル診断", "学習カレンダー", "組織管理"],
+    features: ["スキルカード無制限", "AIロールプレイ", "スキル診断", "学習カレンダー"],
     highlight: true,
   },
   {
     name: "Pro",
     price: "¥4,500/月",
-    features: ["Basicの全機能", "優先AIレスポンス", "詳細分析レポート", "管理者ダッシュボード", "カリキュラム管理"],
+    features: ["Basicの全機能", "優先AIレスポンス", "詳細分析レポート", "カスタムシナリオ無制限"],
   },
 ];
 
 type Tab = "personal" | "corporate";
+
+function StepCard({ s, showScreenshot = false }: { s: typeof personalSteps[0]; showScreenshot?: boolean }) {
+  return (
+    <Card className="overflow-hidden" data-testid={`card-step-${s.step}`}>
+      <div className="p-5">
+        <div className="flex gap-4">
+          <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${s.bg} flex items-center justify-center shrink-0`}>
+            <s.icon className={`w-6 h-6 ${s.color}`} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="text-xs font-bold text-muted-foreground">STEP {s.step}</span>
+            </div>
+            <h3 className="font-semibold text-base mb-1.5">{s.title}</h3>
+            <p className="text-sm text-muted-foreground leading-relaxed">{s.description}</p>
+          </div>
+        </div>
+      </div>
+      {showScreenshot && s.screenshot && (
+        <div className="border-t border-border bg-muted/30 p-3">
+          <img
+            src={s.screenshot}
+            alt={s.screenshotAlt}
+            className="w-full max-w-[280px] mx-auto rounded-lg border border-border shadow-sm"
+            loading="lazy"
+            data-testid={`img-step-${s.step}`}
+          />
+        </div>
+      )}
+    </Card>
+  );
+}
 
 export default function GuidePage() {
   const [activeTab, setActiveTab] = useState<Tab>("personal");
@@ -199,20 +244,7 @@ export default function GuidePage() {
             <div data-testid="section-personal">
               <div className="space-y-4 mb-12">
                 {personalSteps.map((s) => (
-                  <Card key={s.step} className="p-5" data-testid={`card-personal-step-${s.step}`}>
-                    <div className="flex gap-4">
-                      <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${s.bg} flex items-center justify-center shrink-0`}>
-                        <s.icon className={`w-6 h-6 ${s.color}`} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          <span className="text-xs font-bold text-muted-foreground">STEP {s.step}</span>
-                        </div>
-                        <h3 className="font-semibold text-base mb-1.5">{s.title}</h3>
-                        <p className="text-sm text-muted-foreground leading-relaxed">{s.description}</p>
-                      </div>
-                    </div>
-                  </Card>
+                  <StepCard key={s.step} s={s} showScreenshot />
                 ))}
               </div>
 
@@ -227,6 +259,38 @@ export default function GuidePage() {
                     <ArrowRight className="w-4 h-4" />
                   </Button>
                 </a>
+              </Card>
+
+              <Card className="p-6" data-testid="card-personal-plans">
+                <h3 className="font-bold text-lg mb-4 text-center">個人向け料金プラン</h3>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  {personalPlans.map((plan) => (
+                    <div
+                      key={plan.name}
+                      className={`rounded-lg border p-4 ${plan.highlight ? "border-primary bg-primary/5" : "border-border"}`}
+                      data-testid={`card-plan-${plan.name}`}
+                    >
+                      <div className="font-bold text-sm mb-1">{plan.name}</div>
+                      <div className="text-xl font-bold mb-3">{plan.price}</div>
+                      <ul className="space-y-1.5">
+                        {plan.features.map((f) => (
+                          <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0 mt-0.5" />
+                            {f}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  ))}
+                </div>
+                <div className="text-center mt-4">
+                  <Link href="/pricing">
+                    <Button variant="link" className="text-sm gap-1" data-testid="link-guide-pricing">
+                      料金プランの詳細を見る
+                      <ArrowRight className="w-3.5 h-3.5" />
+                    </Button>
+                  </Link>
+                </div>
               </Card>
             </div>
           )}
@@ -256,11 +320,11 @@ export default function GuidePage() {
                 <h3 className="font-bold text-lg mb-3 text-center">法人利用のポイント</h3>
                 <ul className="space-y-2.5">
                   {[
-                    "組織の作成・メンバー招待は無料プランでも利用可能",
                     "メンバーは個人のアカウントでログインして学習",
                     "管理者は複数人設定可能（組織設定から権限変更）",
                     "練習ログは自動で記録され、管理者が確認可能",
                     "カリキュラム割り当て時にメンバーへ通知が届きます",
+                    "メンバーの追加・削除に応じて課金が自動調整されます",
                   ].map((text) => (
                     <li key={text} className="flex items-start gap-2.5 text-sm">
                       <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
@@ -273,7 +337,7 @@ export default function GuidePage() {
               <Card className="p-6 mb-8 text-center" data-testid="card-corporate-cta">
                 <h3 className="font-bold text-lg mb-2">チームの営業力を強化しましょう</h3>
                 <p className="text-sm text-muted-foreground mb-5">
-                  無料で組織を作成して、メンバーを招待できます
+                  組織を作成して、メンバーを招待できます
                 </p>
                 <a href="/api/login">
                   <Button size="lg" className="gap-2" data-testid="button-guide-corp-signup">
@@ -282,40 +346,46 @@ export default function GuidePage() {
                   </Button>
                 </a>
               </Card>
-            </div>
-          )}
 
-          <Card className="p-6" data-testid="card-plans">
-            <h3 className="font-bold text-lg mb-4 text-center">料金プラン</h3>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {plans.map((plan) => (
-                <div
-                  key={plan.name}
-                  className={`rounded-lg border p-4 ${plan.highlight ? "border-primary bg-primary/5" : "border-border"}`}
-                  data-testid={`card-plan-${plan.name}`}
-                >
-                  <div className="font-bold text-sm mb-1">{plan.name}</div>
-                  <div className="text-xl font-bold mb-3">{plan.price}</div>
-                  <ul className="space-y-1.5">
-                    {plan.features.map((f) => (
-                      <li key={f} className="flex items-start gap-2 text-xs text-muted-foreground">
-                        <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0 mt-0.5" />
+              <Card className="p-6" data-testid="card-corporate-plan">
+                <h3 className="font-bold text-lg mb-4 text-center">法人プラン</h3>
+                <div className="max-w-sm mx-auto rounded-lg border border-primary bg-primary/5 p-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Crown className="w-5 h-5 text-primary" />
+                    <span className="font-bold text-lg">Enterprise</span>
+                  </div>
+                  <div className="mb-1">
+                    <span className="text-3xl font-bold">¥10,000</span>
+                    <span className="text-sm text-muted-foreground ml-1">/アカウント/月</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-4">
+                    利用人数に応じた従量課金
+                  </p>
+                  <ul className="space-y-2">
+                    {[
+                      "全スキルカード無制限",
+                      "AIロールプレイ無制限",
+                      "詳細スキル診断",
+                      "AIレコメンド",
+                      "学習カレンダー",
+                      "カスタムシナリオ無制限",
+                      "管理者ダッシュボード",
+                      "カリキュラム管理",
+                      "成長トレンド分析",
+                    ].map((f) => (
+                      <li key={f} className="flex items-start gap-2 text-sm">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                         {f}
                       </li>
                     ))}
                   </ul>
                 </div>
-              ))}
+                <p className="text-xs text-muted-foreground text-center mt-4">
+                  メンバー追加時に自動で課金が追加されます。退会時は日割りで調整されます。
+                </p>
+              </Card>
             </div>
-            <div className="text-center mt-4">
-              <Link href="/pricing">
-                <Button variant="link" className="text-sm gap-1" data-testid="link-guide-pricing">
-                  料金プランの詳細を見る
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </Button>
-              </Link>
-            </div>
-          </Card>
+          )}
         </div>
       </main>
 
@@ -328,9 +398,12 @@ export default function GuidePage() {
               </div>
               <span className="font-semibold text-sm">DealCoach</span>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 flex-wrap justify-center">
               <a href="/terms" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
                 利用規約
+              </a>
+              <a href="/privacy" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                プライバシーポリシー
               </a>
               <a href="/legal" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
                 特定商取引法に基づく表記
