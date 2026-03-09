@@ -814,55 +814,37 @@ JSON形式で回答してください:
         return res.status(404).json({ message: "Skill card not found" });
       }
 
-      const prompt = `あなたはBtoB営業の顧客役のシナリオを作成するプロです。以下のスキルを練習させるための、リアルで具体的な商談シナリオを作成してください。
+      const prompt = `「${card.titleJa}」（${card.category}）を練習するBtoB商談シナリオをJSON形式で作成してください。
 
-練習対象スキル: ${card.titleJa}
 スキル説明: ${card.descriptionJa}
-カテゴリ: ${card.category}
 
-シナリオ作成のルール:
-- 業種は毎回変えてください（製造業、IT、小売、医療、建設、物流、金融、教育、飲食など多様に）
-- 会社名は具体的に（例：「東洋精密工業株式会社」「クラウドネクスト合同会社」など）
-- 顧客は具体的な課題・予算感・過去の経験・社内事情を持った人物にしてください
-- 顧客には隠れた本音や懸念（例：実は上司に反対されている、前のベンダーで失敗した、予算が限られている等）を設定してください
-- 営業担当者の役割・会社・提案商品も具体的に設定してください
-- 商談の目的（初回ヒアリング、提案、クロージング等）も設定してください
-
-以下のJSON形式で回答してください:
-{
-  "scenario": "商談の背景説明（業種・会社規模・具体的な状況・課題を3-4文で詳しく）",
-  "salesRole": "営業担当者の役割と会社（例：クラウドサービスを提供するITベンダー・テクノバンス社の法人営業担当）",
-  "meetingGoal": "この商談の目的（例：初回ヒアリング。顧客の課題を深掘りし、次回の提案に繋げる）",
-  "customerName": "お客様の名前と役職（例：山田課長、佐々木取締役）",
-  "customerRole": "役職と会社概要（例：従業員300名の精密機器メーカー・東洋精密工業の製造部課長）",
-  "customerPersonality": "顧客の性格・心理状態（例：慎重で数字を重視、過去にIT導入で失敗した経験があり懐疑的）",
-  "hiddenConcerns": "顧客の隠れた本音・懸念（営業には最初は言わない情報）",
-  "targetTurns": 5
-}`;
+JSON形式で出力（全フィールド必須）:
+{"scenario":"具体的な商談背景（業種・会社名・規模・課題を含む3文）","salesRole":"営業の役割と会社名","meetingGoal":"商談の目的","customerName":"顧客の名前と役職","customerRole":"顧客の会社と役職の詳細","customerPersonality":"顧客の性格","hiddenConcerns":"顧客の隠れた懸念"}`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
         messages: [
-          { role: "system", content: "あなたは営業トレーニング用のシナリオ作成者です。必ずJSON形式のみで回答してください。" },
+          { role: "system", content: "営業トレーニング用シナリオ作成者。JSON形式で回答。業種は製造業・IT・小売・医療・建設・物流・金融・教育・飲食からランダムに選択。会社名は具体的に設定。" },
           { role: "user", content: prompt },
         ],
-        max_completion_tokens: 1024,
+        max_completion_tokens: 800,
         response_format: { type: "json_object" },
       });
 
       const rawContent = response.choices[0]?.message?.content || '{}';
+      console.log("[practice/start] AI raw response:", rawContent.slice(0, 500));
       let result;
       try {
         const parsed = JSON.parse(rawContent);
         result = {
-          scenario: parsed.scenario || parsed.シナリオ || `${card.titleJa}を実践する商談場面です。お客様が課題について相談しています。`,
+          scenario: parsed.scenario || `${card.titleJa}を実践する商談場面です。`,
           salesRole: parsed.salesRole || "ITソリューションベンダーの法人営業担当",
           meetingGoal: parsed.meetingGoal || "初回ヒアリング。顧客の課題を把握し、次回の提案に繋げる。",
-          customerName: parsed.customerName || parsed.顧客名 || "田中部長",
-          customerRole: parsed.customerRole || parsed.顧客役職 || "中堅企業の情報システム部長",
+          customerName: parsed.customerName || "田中部長",
+          customerRole: parsed.customerRole || "中堅企業の情報システム部長",
           customerPersonality: parsed.customerPersonality || "慎重で実績を重視するタイプ",
           hiddenConcerns: parsed.hiddenConcerns || "予算が限られている",
-          targetTurns: Math.min(Math.max(parseInt(parsed.targetTurns) || 5, 3), 6),
+          targetTurns: 5,
           skillName: card.titleJa,
         };
       } catch {
@@ -905,58 +887,50 @@ JSON形式で回答してください:
 
       const turnPhase = safeCurrent <= 1 ? "序盤" : safeCurrent <= Math.ceil(safeTurns * 0.6) ? "中盤" : "終盤";
 
-      const systemPrompt = `あなたは${customerRole}の「${customerName}」です。以下のシナリオでBtoB商談のお客様役をリアルに演じてください。営業担当者からのメッセージに対して、お客様として応答してください。
+      const conversationText = messages.map((m: { role: string; content: string }) =>
+        `${m.role === 'customer' ? customerName : '営業'}: ${m.content}`
+      ).join('\n');
+
+      const systemPrompt = `あなたは${customerRole}の「${customerName}」です。BtoB商談のお客様役を演じてください。
 
 シナリオ: ${scenario}
-あなたの性格・心理状態: ${customerPersonality || "慎重で実績を重視するタイプ"}
-あなたの隠れた懸念（営業が上手く聞き出さない限り自分からは言わない）: ${hiddenConcerns || "予算の問題"}
+性格: ${customerPersonality || "慎重派"}
+隠れた懸念: ${hiddenConcerns || "予算の問題"}
+フェーズ: ${turnPhase}（${safeCurrent}/${safeTurns}ターン目）
+${isLastTurn ? '※最終ターン：感想と次のアクションを伝えてください。' : ''}
 
-現在の会話フェーズ: ${turnPhase}（${safeCurrent}/${safeTurns}ターン目）
+ルール: 営業の質問に具体的に答える。毎回違う内容で応答する。2-4文で回答。`;
 
-演技ルール:
-- 実在するBtoB商談の顧客のように、具体的な数字・社名・状況を交えて話してください
-- 営業の質問には具体的な情報（「月間○件の不良が出ている」「予算は年間○万円程度」「前回は○○社のツールを試した」等）で答えてください
-- 直前の自分の発言と同じ内容・同じフレーズは絶対に繰り返さないでください。必ず新しい情報や視点を加えてください
-- 営業の発言の質に応じて態度を変えてください:
-  - 良い質問や共感には「そうなんですよ、実は...」と深い情報を開示
-  - 的外れな提案には「いや、そういうことではなくて...」と軌道修正
-  - 一方的な売り込みには「ちょっと待ってください、まだ聞きたいことがあるんですが」と遮る
-- ${turnPhase === "序盤" ? "警戒心を持ちつつ、課題について具体的に話してください。まだ詳しい内部事情は明かさないでください。" : turnPhase === "中盤" ? "営業の対応次第で徐々に本音を見せてください。具体的な条件（予算・スケジュール・社内事情）の話題も出してください。" : "会話の着地点を意識してください。前向きなら次のステップの確認、後ろ向きなら具体的な懸念を伝えてください。"}
-- 2-4文で応答してください。短すぎる1文だけの返答は避けてください。
-${isLastTurn ? '- これが最後のやり取りです。会話の総括として、現時点での率直な感想と次のアクション（検討する／上司に相談する／資料を送ってほしい等）を伝えてください。' : ''}
+      const userPrompt = `これまでの会話:
+${conversationText}
 
-応答は必ず以下のJSON形式で返してください:
-{"message": "お客様としての応答（2-4文。具体的な内容を含む）", "isEnd": ${isLastTurn}}`;
+上記の会話を踏まえて、${customerName}として次の応答をしてください。前の発言と違う内容にしてください。
 
-      const chatHistory: { role: "system" | "user" | "assistant"; content: string }[] = [
-        { role: "system", content: systemPrompt },
-      ];
-      for (const m of messages) {
-        if (m.role === 'user') {
-          chatHistory.push({ role: "user", content: m.content });
-        } else if (m.role === 'customer') {
-          chatHistory.push({ role: "assistant", content: JSON.stringify({ message: m.content, isEnd: false }) });
-        }
-      }
+JSON形式で回答:
+{"message":"顧客としての応答（2-4文）","isEnd":${isLastTurn}}`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
-        messages: chatHistory,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
         max_completion_tokens: 512,
         response_format: { type: "json_object" },
       });
 
       const rawContent = response.choices[0]?.message?.content || '{}';
+      console.log("[practice/message] AI raw response:", rawContent.slice(0, 300));
       let result;
       try {
         const parsed = JSON.parse(rawContent);
         result = {
-          message: parsed.message || parsed.応答 || parsed.response || "その点については社内でも議論になっているんです。具体的には、現場の担当者からは操作性を重視してほしいという声が上がっていまして、導入時のトレーニングコストも気になるところです。",
+          message: parsed.message || parsed.応答 || parsed.response || "なるほど、具体的にはどのような形で進めていただけるのでしょうか？",
           isEnd: isLastTurn || parsed.isEnd === true,
         };
       } catch {
         result = {
-          message: "正直に言うと、御社の提案内容自体は興味があるんですが、過去に似たようなツールを導入して定着しなかった経験がありまして。現場の反発をどう乗り越えるか、そのあたりの具体的なサポート体制を教えていただけますか？",
+          message: rawContent.length > 10 ? rawContent.slice(0, 200) : "なるほど、その点についてもう少し詳しくお聞きしたいのですが。",
           isEnd: isLastTurn,
         };
       }
