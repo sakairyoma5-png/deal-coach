@@ -70,11 +70,13 @@ function SkillCardDetail({
   type ChatMessage = { role: 'customer' | 'user'; content: string };
   const [practiceState, setPracticeState] = useState<'idle' | 'chatting' | 'evaluating' | 'done'>('idle');
   const [practiceScenario, setPracticeScenario] = useState("");
+  const [salesRole, setSalesRole] = useState("");
+  const [meetingGoal, setMeetingGoal] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerRole, setCustomerRole] = useState("");
   const [customerPersonality, setCustomerPersonality] = useState("");
   const [hiddenConcerns, setHiddenConcerns] = useState("");
-  const [targetTurns, setTargetTurns] = useState(4);
+  const [targetTurns, setTargetTurns] = useState(5);
   const [currentTurn, setCurrentTurn] = useState(0);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [userInput, setUserInput] = useState("");
@@ -93,13 +95,15 @@ function SkillCardDetail({
     },
     onSuccess: (data) => {
       setPracticeScenario(data.scenario || "");
+      setSalesRole(data.salesRole || "");
+      setMeetingGoal(data.meetingGoal || "");
       setCustomerName(data.customerName || "田中部長");
       setCustomerRole(data.customerRole || "");
       setCustomerPersonality(data.customerPersonality || "");
       setHiddenConcerns(data.hiddenConcerns || "");
       setTargetTurns(data.targetTurns || 5);
-      setCurrentTurn(1);
-      setChatMessages([{ role: 'customer', content: data.firstMessage || "お話を聞かせてください。" }]);
+      setCurrentTurn(0);
+      setChatMessages([]);
       setPracticeState('chatting');
       setEvaluation(null);
       setUserInput("");
@@ -388,9 +392,29 @@ function SkillCardDetail({
 
           {practiceState !== 'idle' && (
             <div className="space-y-3 mt-1">
-              <div className="bg-muted/50 rounded-md p-2.5">
-                <p className="text-xs text-muted-foreground leading-relaxed">{practiceScenario}</p>
-                <p className="text-xs text-muted-foreground mt-1">相手: <span className="font-medium text-foreground">{customerName}</span>（{customerRole}）</p>
+              <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+                <div>
+                  <p className="text-[10px] font-semibold text-primary uppercase tracking-wider mb-0.5">シナリオ</p>
+                  <p className="text-xs text-foreground leading-relaxed">{practiceScenario}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <p className="text-[10px] font-semibold text-muted-foreground">あなたの役割</p>
+                    <p className="text-xs text-foreground">{salesRole || "法人営業担当"}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-semibold text-muted-foreground">商談の目的</p>
+                    <p className="text-xs text-foreground">{meetingGoal || "顧客課題のヒアリング"}</p>
+                  </div>
+                </div>
+                <div className="border-t pt-1.5">
+                  <p className="text-[10px] font-semibold text-muted-foreground">商談相手</p>
+                  <p className="text-xs text-foreground"><span className="font-medium">{customerName}</span>（{customerRole}）</p>
+                </div>
+                <div>
+                  <p className="text-[10px] font-semibold text-muted-foreground">練習スキル</p>
+                  <p className="text-xs text-primary font-medium">{card.titleJa}</p>
+                </div>
               </div>
 
               {practiceState === 'chatting' && (
@@ -437,20 +461,21 @@ function SkillCardDetail({
                 )}
               </div>
 
+              {practiceState === 'chatting' && chatMessages.length === 0 && !sendMessageMutation.isPending && (
+                <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 text-center">
+                  <p className="text-xs text-primary font-medium mb-1">商談を始めましょう</p>
+                  <p className="text-[10px] text-muted-foreground">上記のシナリオを読み、営業担当として最初の挨拶・アプローチを入力してください。</p>
+                </div>
+              )}
+
               {practiceState === 'chatting' && !sendMessageMutation.isPending && (
                 <div className="flex gap-2 items-end">
                   <Textarea
                     value={userInput}
                     onChange={(e) => setUserInput(e.target.value)}
-                    placeholder="営業としての返答を入力..."
+                    placeholder={chatMessages.length === 0 ? "営業として最初の挨拶を入力..." : "営業としての返答を入力..."}
                     className="text-sm min-h-[44px] max-h-[100px] resize-none flex-1"
                     data-testid="textarea-practice-input"
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && !e.shiftKey && userInput.trim()) {
-                        e.preventDefault();
-                        sendMessageMutation.mutate(userInput.trim());
-                      }
-                    }}
                   />
                   <Button
                     size="icon"
