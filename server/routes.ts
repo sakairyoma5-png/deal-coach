@@ -8,6 +8,14 @@ import { getUncachableStripeClient, getStripePublishableKey } from "./stripeClie
 import { db } from "./db";
 import { sql } from "drizzle-orm";
 
+async function withOrgSeatLock<T>(orgId: number, fn: (tx: typeof db) => Promise<T>): Promise<T> {
+  const lockId = 100000 + orgId;
+  return await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(${lockId})`);
+    return await fn(tx);
+  });
+}
+
 const openai = new OpenAI({
   apiKey: process.env.AI_INTEGRATIONS_OPENAI_API_KEY,
   baseURL: process.env.AI_INTEGRATIONS_OPENAI_BASE_URL,
@@ -1360,25 +1368,27 @@ ${conversationText}
         return res.status(400).json({ message: "この組織の法人プランが有効ではありません。管理者にお問い合わせください。" });
       }
 
-      await storage.addOrgMember({ orgId: org.id, userId, role: "member" });
+      await withOrgSeatLock(org.id, async (tx) => {
+        await storage.addOrgMember({ orgId: org.id, userId, role: "member" });
 
-      try {
-        const stripe = await getUncachableStripeClient();
-        const newMemberCount = await storage.getOrgMemberCount(org.id);
-        const subscription = await stripe.subscriptions.retrieve(org.stripeSubscriptionId);
+        try {
+          const stripe = await getUncachableStripeClient();
+          const newMemberCount = await storage.getOrgMemberCount(org.id);
+          const subscription = await stripe.subscriptions.retrieve(org.stripeSubscriptionId!);
 
-        await stripe.subscriptions.update(org.stripeSubscriptionId, {
-          items: [{
-            id: subscription.items.data[0].id,
-            quantity: newMemberCount,
-          }],
-          proration_behavior: "create_prorations",
-        });
-      } catch (stripeError) {
-        console.error("Error updating Stripe seat count on join:", stripeError);
-        await storage.removeOrgMember(org.id, userId);
-        return res.status(500).json({ message: "課金処理に失敗しました。管理者にお問い合わせください。" });
-      }
+          await stripe.subscriptions.update(org.stripeSubscriptionId!, {
+            items: [{
+              id: subscription.items.data[0].id,
+              quantity: newMemberCount,
+            }],
+            proration_behavior: "create_prorations",
+          });
+        } catch (stripeError) {
+          console.error("Error updating Stripe seat count on join:", stripeError);
+          await storage.removeOrgMember(org.id, userId);
+          throw stripeError;
+        }
+      });
 
       res.json(org);
     } catch (error: any) {
@@ -1428,25 +1438,36 @@ ${conversationText}
 
       const org = await storage.getOrganization(orgId);
 
-      await storage.removeOrgMember(orgId, targetUserId);
-
       if (org?.stripeSubscriptionId && org.subscriptionStatus === "active") {
-        const stripe = await getUncachableStripeClient();
-        const memberCount = await storage.getOrgMemberCount(orgId);
+        const memberRole = await storage.getOrgMemberRole(orgId, targetUserId);
+        await withOrgSeatLock(orgId, async (tx) => {
+          await storage.removeOrgMember(orgId, targetUserId);
 
-        if (memberCount === 0) {
-          await stripe.subscriptions.cancel(org.stripeSubscriptionId);
-          await storage.updateOrganization(orgId, { subscriptionStatus: "canceled" });
-        } else {
-          const subscription = await stripe.subscriptions.retrieve(org.stripeSubscriptionId);
-          await stripe.subscriptions.update(org.stripeSubscriptionId, {
-            items: [{
-              id: subscription.items.data[0].id,
-              quantity: memberCount,
-            }],
-            proration_behavior: "create_prorations",
-          });
-        }
+          try {
+            const stripe = await getUncachableStripeClient();
+            const memberCount = await storage.getOrgMemberCount(orgId);
+
+            if (memberCount === 0) {
+              await stripe.subscriptions.cancel(org.stripeSubscriptionId!);
+              await storage.updateOrganization(orgId, { subscriptionStatus: "canceled" });
+            } else {
+              const subscription = await stripe.subscriptions.retrieve(org.stripeSubscriptionId!);
+              await stripe.subscriptions.update(org.stripeSubscriptionId!, {
+                items: [{
+                  id: subscription.items.data[0].id,
+                  quantity: memberCount,
+                }],
+                proration_behavior: "create_prorations",
+              });
+            }
+          } catch (stripeError) {
+            console.error("Error updating Stripe seat count on remove:", stripeError);
+            await storage.addOrgMember({ orgId, userId: targetUserId, role: memberRole || "member" });
+            throw stripeError;
+          }
+        });
+      } else {
+        await storage.removeOrgMember(orgId, targetUserId);
       }
 
       res.json({ success: true });

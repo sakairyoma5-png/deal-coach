@@ -129,6 +129,9 @@ users, sessions (auth), subscriptions, skill_cards, roleplay_scenarios, roleplay
 - stripeClient.ts: Replit connector first, fallback to STRIPE_SECRET_KEY/STRIPE_PUBLISHABLE_KEY env vars
 - stripe-replit-sync manages stripe schema tables (products, prices, subscriptions, customers)
 - Webhook registered BEFORE express.json() in index.ts
+- Webhook handler (webhookHandlers.ts): processes stripe-replit-sync + org subscription status sync
+  - Handles: customer.subscription.updated/deleted/paused, invoice.payment_failed
+  - Auto-updates org subscriptionStatus on subscription state changes
 - Subscription status: stored in local subscriptions table, synced from Stripe on checkout success
 - Cancellation: via Stripe Customer Portal (cancel_at_period_end, access until period end)
 
@@ -141,6 +144,7 @@ users, sessions (auth), subscriptions, skill_cards, roleplay_scenarios, roleplay
 ## Corporate/Organization System
 - Organizations: create with name, auto-generate invite code
 - Members: join via invite code, roles (admin/member)
+- Seat count updates: PostgreSQL advisory locks (pg_advisory_xact_lock) in DB transactions prevent race conditions; Stripe failure triggers compensation rollback
 - Practice logs: auto-recorded on roleplay end + skill card practice evaluate, includes orgId if user belongs to org
 - Admin dashboard: member scores (overall + 4-axis), weekly practice counts, non-participants list, completion rates, curriculum progress
 - Curriculum: admin assigns skill cards per week, notifications sent to members, progress tracked
@@ -151,6 +155,7 @@ users, sessions (auth), subscriptions, skill_cards, roleplay_scenarios, roleplay
 - `npm run dev` - Start dev server
 - `npm run db:push` - Push schema changes
 - `npx tsx server/seed-stripe.ts` - Seed Stripe products (run once)
+- `npx tsx scripts/capture-guide-screenshots.ts` - Capture guide page screenshots (uses Playwright with mocked auth)
 
 ## User Preferences
 - Japanese UI language

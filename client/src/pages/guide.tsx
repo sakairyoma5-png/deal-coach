@@ -39,8 +39,8 @@ const personalSteps = [
     description: "SPIN営業、ミラーリング、クロージングなど50枚以上のスキルカードを6つのカテゴリから選んで学習。良い例・悪い例、チェックリスト付きで実践的に理解できます。",
     color: "text-emerald-500",
     bg: "from-emerald-500/10 to-green-500/10 dark:from-emerald-500/20 dark:to-green-500/20",
-    screenshot: null,
-    screenshotAlt: "",
+    screenshot: "/guide/skills.png",
+    screenshotAlt: "スキルカード一覧画面",
   },
   {
     step: 3,
@@ -49,8 +49,8 @@ const personalSteps = [
     description: "6つの性格タイプ × 3段階の難易度から顧客を選んで、リアルな商談シミュレーション。自由にシナリオを設定するカスタムモードも利用できます。",
     color: "text-violet-500",
     bg: "from-violet-500/10 to-purple-500/10 dark:from-violet-500/20 dark:to-purple-500/20",
-    screenshot: null,
-    screenshotAlt: "",
+    screenshot: "/guide/roleplay.png",
+    screenshotAlt: "AIロールプレイ画面",
   },
   {
     step: 4,
@@ -59,8 +59,8 @@ const personalSteps = [
     description: "ロールプレイ終了後、AIコーチが会話内容を分析。強み・改善点を具体的にフィードバック。質問しながら深く理解できます。",
     color: "text-amber-500",
     bg: "from-amber-500/10 to-orange-500/10 dark:from-amber-500/20 dark:to-orange-500/20",
-    screenshot: null,
-    screenshotAlt: "",
+    screenshot: "/guide/dashboard.png",
+    screenshotAlt: "ダッシュボード画面",
   },
   {
     step: 5,
@@ -69,8 +69,8 @@ const personalSteps = [
     description: "傾聴力・質問力・共感力・クロージング力の4軸で営業スキルを診断。練習を重ねるごとにスコアが更新され、成長を実感できます。",
     color: "text-rose-500",
     bg: "from-rose-500/10 to-pink-500/10 dark:from-rose-500/20 dark:to-pink-500/20",
-    screenshot: null,
-    screenshotAlt: "",
+    screenshot: "/guide/diagnosis.png",
+    screenshotAlt: "スキル診断画面",
   },
   {
     step: 6,
@@ -79,8 +79,8 @@ const personalSteps = [
     description: "学習した日が自動で記録され、カレンダー上で確認できます。学習予定を登録して、計画的にスキルアップしましょう。",
     color: "text-sky-500",
     bg: "from-sky-500/10 to-indigo-500/10 dark:from-sky-500/20 dark:to-indigo-500/20",
-    screenshot: null,
-    screenshotAlt: "",
+    screenshot: "/guide/calendar.png",
+    screenshotAlt: "学習カレンダー画面",
   },
 ];
 
