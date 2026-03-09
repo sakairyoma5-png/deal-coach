@@ -7,7 +7,7 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { BottomNav } from "@/components/bottom-nav";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { Textarea } from "@/components/ui/textarea";
+
 import { useToast } from "@/hooks/use-toast";
 import { useState } from "react";
 import {
@@ -40,9 +40,6 @@ import {
   Link2,
   Filter,
   Search,
-  ThumbsUp,
-  TrendingUp,
-  MessageSquareQuote,
 } from "lucide-react";
 import type { SkillCard, UserSkillProgress, SkillCardStudyLog } from "@shared/schema";
 import { UpgradeBanner } from "@/components/upgrade-banner";
@@ -67,8 +64,10 @@ function SkillCardDetail({
   const { toast } = useToast();
   const [completed, setCompleted] = useState(isCompleted);
 
-  type ChatMessage = { role: 'customer' | 'user'; content: string };
-  const [practiceState, setPracticeState] = useState<'idle' | 'chatting' | 'evaluating' | 'done'>('idle');
+  type QuizChoice = { text: string; isCorrect: boolean; explanation: string };
+  type QuizQuestion = { situation: string; customerStatement: string; choices: QuizChoice[]; questionNumber: number };
+  type QuizAnswer = { questionNumber: number; situation: string; customerStatement: string; selectedIndex: number; correctIndex: number; isCorrect: boolean; choices: QuizChoice[] };
+  const [practiceState, setPracticeState] = useState<'idle' | 'loading' | 'questioning' | 'answered' | 'done'>('idle');
   const [practiceScenario, setPracticeScenario] = useState("");
   const [salesRole, setSalesRole] = useState("");
   const [meetingGoal, setMeetingGoal] = useState("");
@@ -76,17 +75,10 @@ function SkillCardDetail({
   const [customerRole, setCustomerRole] = useState("");
   const [customerPersonality, setCustomerPersonality] = useState("");
   const [hiddenConcerns, setHiddenConcerns] = useState("");
-  const [targetTurns, setTargetTurns] = useState(5);
-  const [currentTurn, setCurrentTurn] = useState(0);
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-  const [userInput, setUserInput] = useState("");
-  const [evaluation, setEvaluation] = useState<{
-    score: number;
-    goodPoints: string[];
-    improvements: string[];
-    overallFeedback: string;
-    conversationImprovements: { yourStatement: string; betterVersion: string; reason: string }[];
-  } | null>(null);
+  const [currentQuestion, setCurrentQuestion] = useState<QuizQuestion | null>(null);
+  const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
+  const [quizAnswers, setQuizAnswers] = useState<QuizAnswer[]>([]);
+  const [quizScore, setQuizScore] = useState<{ correctCount: number; totalQuestions: number } | null>(null);
 
   const startPracticeMutation = useMutation({
     mutationFn: async () => {
@@ -101,80 +93,79 @@ function SkillCardDetail({
       setCustomerRole(data.customerRole || "");
       setCustomerPersonality(data.customerPersonality || "");
       setHiddenConcerns(data.hiddenConcerns || "");
-      setTargetTurns(data.targetTurns || 5);
-      setCurrentTurn(1);
-      const greeting = data.firstGreeting || "本日はお時間をいただきありがとうございます。どのようなご提案をいただけるのでしょうか？";
-      setChatMessages([{ role: 'customer', content: greeting }]);
-      setPracticeState('chatting');
-      setEvaluation(null);
-      setUserInput("");
+      setQuizAnswers([]);
+      setQuizScore(null);
+      setSelectedAnswer(null);
+      setCurrentQuestion(null);
+      setPracticeState('loading');
+      fetchQuizQuestion(1, data, []);
     },
     onError: () => {
       toast({ title: "エラー", description: "練習の開始に失敗しました", variant: "destructive" });
     },
   });
 
-  const sendMessageMutation = useMutation({
-    mutationFn: async (userMessage: string) => {
-      const newMessages = [...chatMessages, { role: 'user' as const, content: userMessage }];
-      const nextTurn = currentTurn + 1;
-      const res = await apiRequest("POST", `/api/skill-cards/${card.id}/practice/message`, {
-        messages: newMessages,
-        scenario: practiceScenario,
-        customerName,
-        customerRole,
-        customerPersonality,
-        hiddenConcerns,
-        currentTurn: nextTurn,
-        targetTurns,
+  const fetchQuizQuestion = async (qNum: number, scenarioData?: any, prevSits?: string[]) => {
+    try {
+      const sc = scenarioData || { scenario: practiceScenario, customerName, customerRole, customerPersonality, hiddenConcerns };
+      const res = await apiRequest("POST", `/api/skill-cards/${card.id}/practice/quiz`, {
+        scenario: sc.scenario || practiceScenario,
+        customerName: sc.customerName || customerName,
+        customerRole: sc.customerRole || customerRole,
+        customerPersonality: sc.customerPersonality || customerPersonality,
+        hiddenConcerns: sc.hiddenConcerns || hiddenConcerns,
+        questionNumber: qNum,
+        previousSituations: prevSits || quizAnswers.map(a => a.situation),
       });
-      return { response: await res.json(), userMessage, nextTurn };
-    },
-    onSuccess: ({ response, userMessage, nextTurn }) => {
-      const customerMsg = response.message || "なるほど、そうですか。";
-      const newMessages: ChatMessage[] = [
-        ...chatMessages,
-        { role: 'user', content: userMessage },
-        { role: 'customer', content: customerMsg },
-      ];
-      setChatMessages(newMessages);
-      setCurrentTurn(nextTurn);
-      setUserInput("");
+      const question = await res.json();
+      setCurrentQuestion(question);
+      setSelectedAnswer(null);
+      setPracticeState('questioning');
+    } catch {
+      toast({ title: "エラー", description: "問題の生成に失敗しました", variant: "destructive" });
+      setPracticeState('idle');
+    }
+  };
 
-      if (response.isEnd || nextTurn >= targetTurns) {
-        setPracticeState('evaluating');
-        evaluateMutation.mutate(newMessages);
+  const handleSelectAnswer = (index: number) => {
+    if (selectedAnswer !== null || !currentQuestion) return;
+    setSelectedAnswer(index);
+    const correctIdx = currentQuestion.choices.findIndex(c => c.isCorrect);
+    const answer: QuizAnswer = {
+      questionNumber: currentQuestion.questionNumber,
+      situation: currentQuestion.situation,
+      customerStatement: currentQuestion.customerStatement,
+      selectedIndex: index,
+      correctIndex: correctIdx >= 0 ? correctIdx : 0,
+      isCorrect: currentQuestion.choices[index]?.isCorrect === true,
+      choices: currentQuestion.choices,
+    };
+    setQuizAnswers(prev => [...prev, answer]);
+    setPracticeState('answered');
+  };
+
+  const handleNextQuestion = async () => {
+    const nextNum = (currentQuestion?.questionNumber || 0) + 1;
+    if (nextNum > 5) {
+      setPracticeState('loading');
+      try {
+        const allAnswers = quizAnswers;
+        const res = await apiRequest("POST", `/api/skill-cards/${card.id}/practice/evaluate`, {
+          answers: allAnswers.map(a => ({ selectedIndex: a.selectedIndex, correctIndex: a.correctIndex })),
+          scenario: practiceScenario,
+        });
+        const data = await res.json();
+        setQuizScore({ correctCount: data.correctCount || 0, totalQuestions: data.totalQuestions || 5 });
+      } catch {
+        const correctCount = quizAnswers.filter(a => a.isCorrect).length;
+        setQuizScore({ correctCount, totalQuestions: quizAnswers.length });
       }
-    },
-    onError: () => {
-      toast({ title: "エラー", description: "応答の取得に失敗しました", variant: "destructive" });
-    },
-  });
-
-  const evaluateMutation = useMutation({
-    mutationFn: async (msgs: ChatMessage[]) => {
-      const res = await apiRequest("POST", `/api/skill-cards/${card.id}/practice/evaluate`, {
-        messages: msgs,
-        scenario: practiceScenario,
-        customerName,
-      });
-      return await res.json();
-    },
-    onSuccess: (data) => {
-      setEvaluation({
-        score: typeof data?.score === 'number' ? Math.max(1, Math.min(5, data.score)) : 3,
-        goodPoints: Array.isArray(data?.goodPoints) && data.goodPoints.length > 0 ? data.goodPoints : ["会話に積極的に取り組みました。"],
-        improvements: Array.isArray(data?.improvements) && data.improvements.length > 0 ? data.improvements : ["より具体的な提案を含めると効果的です。"],
-        overallFeedback: data?.overallFeedback || "練習お疲れさまでした。",
-        conversationImprovements: Array.isArray(data?.conversationImprovements) ? data.conversationImprovements : [],
-      });
       setPracticeState('done');
-    },
-    onError: () => {
-      toast({ title: "エラー", description: "評価の生成に失敗しました", variant: "destructive" });
-      setPracticeState('done');
-    },
-  });
+    } else {
+      setPracticeState('loading');
+      await fetchQuizQuestion(nextNum);
+    }
+  };
 
   const completeMutation = useMutation({
     mutationFn: async () => {
@@ -361,7 +352,7 @@ function SkillCardDetail({
           <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
             <div className="flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-primary" />
-              <h3 className="font-semibold text-sm">実習チャット</h3>
+              <h3 className="font-semibold text-sm">実習クイズ</h3>
             </div>
             {(practiceState === 'idle' || practiceState === 'done') && userPlan !== 'free' && (
               <Button
@@ -382,12 +373,12 @@ function SkillCardDetail({
           </div>
 
           {practiceState === 'idle' && !startPracticeMutation.isPending && userPlan === 'free' && (
-            <UpgradeBanner feature="AI実習チャット" requiredPlan="Basic" />
+            <UpgradeBanner feature="AI実習クイズ" requiredPlan="Basic" />
           )}
 
           {practiceState === 'idle' && !startPracticeMutation.isPending && userPlan !== 'free' && (
             <p className="text-xs text-muted-foreground">
-              AIがお客様役となり、実際の商談をシミュレーションします。会話形式で練習し、終了後にAIコーチが評価します。
+              AIが商談シナリオを生成し、顧客の発言に対する最適な応答を4択から選ぶクイズ形式で練習します。全5問出題されます。
             </p>
           )}
 
@@ -425,159 +416,174 @@ function SkillCardDetail({
                 </div>
               </div>
 
-              {practiceState === 'chatting' && (
+              {(practiceState === 'questioning' || practiceState === 'answered' || practiceState === 'loading') && (
                 <div className="flex items-center gap-1.5">
                   <div className="h-1.5 flex-1 bg-muted rounded-full overflow-hidden">
                     <div
                       className="h-full bg-primary rounded-full transition-all"
-                      style={{ width: `${Math.min(100, (currentTurn / targetTurns) * 100)}%` }}
+                      style={{ width: `${Math.min(100, ((currentQuestion?.questionNumber || 1) / 5) * 100)}%` }}
                     />
                   </div>
-                  <span className="text-[10px] text-muted-foreground shrink-0">{currentTurn}/{targetTurns}</span>
+                  <span className="text-[10px] text-muted-foreground shrink-0">
+                    問題 {currentQuestion?.questionNumber || 1}/5
+                  </span>
                 </div>
               )}
 
-              <div className="space-y-2" data-testid="section-practice-chat">
-                {chatMessages.map((msg, i) => (
-                  <div
-                    key={i}
-                    className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                    data-testid={`chat-message-${i}`}
-                  >
-                    <div
-                      className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm leading-relaxed ${
-                        msg.role === 'user'
-                          ? 'bg-primary text-primary-foreground rounded-br-sm'
-                          : 'bg-muted rounded-bl-sm'
-                      }`}
-                    >
-                      <p className={`text-[10px] font-medium mb-0.5 ${msg.role === 'user' ? 'text-primary-foreground/70' : 'text-muted-foreground'}`}>
-                        {msg.role === 'user' ? 'あなた（営業）' : customerName}
-                      </p>
-                      {msg.content}
-                    </div>
-                  </div>
-                ))}
-
-                {sendMessageMutation.isPending && (
-                  <div className="flex justify-start">
-                    <div className="bg-muted rounded-2xl rounded-bl-sm px-3 py-2 text-sm">
-                      <p className="text-[10px] font-medium mb-0.5 text-muted-foreground">{customerName}</p>
-                      <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {practiceState === 'chatting' && chatMessages.length === 1 && chatMessages[0]?.role === 'customer' && !sendMessageMutation.isPending && (
-                <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 text-center">
-                  <p className="text-xs text-primary font-medium mb-1">お客様が挨拶しました</p>
-                  <p className="text-[10px] text-muted-foreground">営業担当としてお客様に応答してください。シナリオを踏まえた提案やヒアリングを行いましょう。</p>
-                </div>
-              )}
-
-              {practiceState === 'chatting' && !sendMessageMutation.isPending && (
-                <div className="flex gap-2 items-end">
-                  <Textarea
-                    value={userInput}
-                    onChange={(e) => setUserInput(e.target.value)}
-                    placeholder={chatMessages.length === 0 ? "営業として最初の挨拶を入力..." : "営業としての返答を入力..."}
-                    className="text-sm min-h-[44px] max-h-[100px] resize-none flex-1"
-                    data-testid="textarea-practice-input"
-                  />
-                  <Button
-                    size="icon"
-                    onClick={() => {
-                      if (userInput.trim()) sendMessageMutation.mutate(userInput.trim());
-                    }}
-                    disabled={!userInput.trim()}
-                    data-testid="button-send-message"
-                  >
-                    <CheckCircle2 className="w-4 h-4" />
-                  </Button>
-                </div>
-              )}
-
-              {practiceState === 'evaluating' && (
-                <div className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground">
+              {practiceState === 'loading' && (
+                <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  会話を分析中...
+                  問題を生成中...
                 </div>
               )}
 
-              {practiceState === 'done' && evaluation && (
+              {(practiceState === 'questioning' || practiceState === 'answered') && currentQuestion && (
+                <div className="space-y-3" data-testid="section-quiz-question">
+                  <div className="bg-muted rounded-lg p-3">
+                    <p className="text-[10px] font-semibold text-muted-foreground mb-1">場面</p>
+                    <p className="text-xs text-foreground leading-relaxed mb-2">{currentQuestion.situation}</p>
+                    <div className="bg-background rounded-md p-2.5 border">
+                      <p className="text-[10px] font-semibold text-muted-foreground mb-0.5">{customerName}の発言</p>
+                      <p className="text-sm text-foreground leading-relaxed">「{currentQuestion.customerStatement}」</p>
+                    </div>
+                  </div>
+
+                  <p className="text-xs font-medium text-foreground">営業としてどう応答しますか？</p>
+
+                  <div className="space-y-2" data-testid="section-quiz-choices">
+                    {currentQuestion.choices.map((choice, i) => {
+                      const label = String.fromCharCode(65 + i);
+                      const isSelected = selectedAnswer === i;
+                      const isAnswered = practiceState === 'answered';
+                      const isCorrect = choice.isCorrect;
+
+                      let borderClass = "border-border hover:border-primary/50 cursor-pointer";
+                      let bgClass = "bg-background";
+                      if (isAnswered) {
+                        if (isCorrect) {
+                          borderClass = "border-emerald-500";
+                          bgClass = "bg-emerald-500/5";
+                        } else if (isSelected && !isCorrect) {
+                          borderClass = "border-red-500";
+                          bgClass = "bg-red-500/5";
+                        } else {
+                          borderClass = "border-border opacity-60";
+                        }
+                      } else if (isSelected) {
+                        borderClass = "border-primary ring-1 ring-primary/30";
+                        bgClass = "bg-primary/5";
+                      }
+
+                      return (
+                        <button
+                          key={i}
+                          className={`w-full text-left rounded-lg border p-3 transition-all ${borderClass} ${bgClass} ${!isAnswered ? '' : 'cursor-default'}`}
+                          onClick={() => handleSelectAnswer(i)}
+                          disabled={isAnswered}
+                          data-testid={`quiz-choice-${i}`}
+                        >
+                          <div className="flex items-start gap-2.5">
+                            <span className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                              isAnswered && isCorrect ? 'bg-emerald-500 text-white' :
+                              isAnswered && isSelected && !isCorrect ? 'bg-red-500 text-white' :
+                              isSelected ? 'bg-primary text-primary-foreground' :
+                              'bg-muted text-muted-foreground'
+                            }`}>
+                              {isAnswered && isCorrect ? <CheckCircle2 className="w-3.5 h-3.5" /> :
+                               isAnswered && isSelected && !isCorrect ? <XCircle className="w-3.5 h-3.5" /> :
+                               label}
+                            </span>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm text-foreground leading-relaxed">{choice.text}</p>
+                              {isAnswered && (isCorrect || isSelected) && choice.explanation && (
+                                <p className={`text-xs mt-1.5 leading-relaxed ${isCorrect ? 'text-emerald-600 dark:text-emerald-400' : 'text-red-600 dark:text-red-400'}`}>
+                                  {choice.explanation}
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {practiceState === 'answered' && (
+                    <Button
+                      className="w-full"
+                      onClick={handleNextQuestion}
+                      data-testid="button-next-question"
+                    >
+                      {(currentQuestion.questionNumber || 0) >= 5 ? "結果を見る" : "次の問題へ"}
+                      <ChevronRight className="w-4 h-4 ml-1" />
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {practiceState === 'done' && quizScore && (
                 <div className="space-y-4 border-t pt-4" data-testid="section-evaluation-result">
-                  <div className="flex items-center gap-3">
-                    <div className="flex gap-0.5">
+                  <div className="text-center py-2">
+                    <div className="flex items-center justify-center gap-0.5 mb-2">
                       {[1, 2, 3, 4, 5].map((s) => (
                         <Star
                           key={s}
-                          className={`w-5 h-5 ${s <= evaluation.score ? "text-amber-500 fill-amber-500" : "text-muted-foreground/30"}`}
+                          className={`w-6 h-6 ${s <= quizScore.correctCount ? "text-amber-500 fill-amber-500" : "text-muted-foreground/30"}`}
                         />
                       ))}
                     </div>
-                    <span className="text-base font-semibold" data-testid="text-evaluation-score">{evaluation.score}/5</span>
+                    <p className="text-2xl font-bold" data-testid="text-evaluation-score">
+                      {quizScore.correctCount}/{quizScore.totalQuestions}
+                    </p>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {quizScore.correctCount === 5 ? "パーフェクト！素晴らしい営業センスです。" :
+                       quizScore.correctCount >= 4 ? "よくできました！あと少しで完璧です。" :
+                       quizScore.correctCount >= 3 ? "合格ラインです。さらなるスキルアップを目指しましょう。" :
+                       quizScore.correctCount >= 2 ? "もう少し練習が必要です。解説を確認しましょう。" :
+                       "基本からしっかり復習しましょう。スキルカードの内容を再確認してください。"}
+                    </p>
                   </div>
 
-                  <p className="text-sm text-muted-foreground leading-relaxed" data-testid="text-overall-feedback">
-                    {evaluation.overallFeedback}
-                  </p>
-
-                  <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-md p-3" data-testid="section-good-points">
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <ThumbsUp className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                      <p className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">良かった点</p>
-                    </div>
-                    <ul className="space-y-1">
-                      {evaluation.goodPoints.map((point, i) => (
-                        <li key={i} className="text-sm text-muted-foreground leading-relaxed flex items-start gap-1.5">
-                          <span className="text-emerald-500 mt-0.5 shrink-0">+</span>
-                          <span>{point}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  <div className="bg-amber-500/5 border border-amber-500/20 rounded-md p-3" data-testid="section-improvements">
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <TrendingUp className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
-                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">改善ポイント</p>
-                    </div>
-                    <ul className="space-y-1">
-                      {evaluation.improvements.map((point, i) => (
-                        <li key={i} className="text-sm text-muted-foreground leading-relaxed flex items-start gap-1.5">
-                          <span className="text-amber-500 mt-0.5 shrink-0">-</span>
-                          <span>{point}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-
-                  {evaluation.conversationImprovements && evaluation.conversationImprovements.length > 0 && (
-                    <div className="bg-blue-500/5 border border-blue-500/20 rounded-md p-3" data-testid="section-conversation-improvements">
-                      <div className="flex items-center gap-1.5 mb-3">
-                        <MessageSquareQuote className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                        <p className="text-xs font-semibold text-blue-700 dark:text-blue-400">会話の改善ポイント</p>
-                      </div>
-                      <div className="space-y-3">
-                        {evaluation.conversationImprovements.map((item, i) => (
-                          <div key={i} className="space-y-1.5">
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold text-muted-foreground">問題ごとの結果</p>
+                    {quizAnswers.map((answer, i) => (
+                      <div
+                        key={i}
+                        className={`rounded-lg border p-3 ${answer.isCorrect ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-red-500/30 bg-red-500/5'}`}
+                        data-testid={`quiz-result-${i}`}
+                      >
+                        <div className="flex items-center gap-2 mb-2">
+                          {answer.isCorrect ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
+                          ) : (
+                            <XCircle className="w-4 h-4 text-red-500 shrink-0" />
+                          )}
+                          <span className="text-xs font-semibold">問題 {answer.questionNumber}</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground mb-1.5">{answer.situation}</p>
+                        <p className="text-xs text-foreground mb-2">「{answer.customerStatement}」</p>
+                        {!answer.isCorrect && (
+                          <div className="space-y-1.5">
                             <div className="bg-red-500/5 border-l-2 border-red-400 pl-2 py-1 rounded-r">
-                              <p className="text-[10px] font-semibold text-red-600 dark:text-red-400 mb-0.5">あなたの発言</p>
-                              <p className="text-xs text-muted-foreground">「{item.yourStatement}」</p>
+                              <p className="text-[10px] font-semibold text-red-600 dark:text-red-400 mb-0.5">あなたの回答</p>
+                              <p className="text-xs text-muted-foreground">{answer.choices[answer.selectedIndex]?.text}</p>
                             </div>
-                            <div className="bg-green-500/5 border-l-2 border-green-500 pl-2 py-1 rounded-r">
-                              <p className="text-[10px] font-semibold text-green-600 dark:text-green-400 mb-0.5">改善例</p>
-                              <p className="text-xs text-foreground">「{item.betterVersion}」</p>
+                            <div className="bg-emerald-500/5 border-l-2 border-emerald-500 pl-2 py-1 rounded-r">
+                              <p className="text-[10px] font-semibold text-emerald-600 dark:text-emerald-400 mb-0.5">正解</p>
+                              <p className="text-xs text-foreground">{answer.choices[answer.correctIndex]?.text}</p>
+                              {answer.choices[answer.correctIndex]?.explanation && (
+                                <p className="text-[11px] text-muted-foreground mt-0.5">{answer.choices[answer.correctIndex].explanation}</p>
+                              )}
                             </div>
-                            {item.reason && (
-                              <p className="text-[11px] text-muted-foreground pl-2">{item.reason}</p>
-                            )}
                           </div>
-                        ))}
+                        )}
+                        {answer.isCorrect && answer.choices[answer.correctIndex]?.explanation && (
+                          <p className="text-xs text-emerald-600 dark:text-emerald-400">
+                            {answer.choices[answer.correctIndex].explanation}
+                          </p>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
