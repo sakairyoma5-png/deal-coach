@@ -6,7 +6,7 @@ async function seedStripeProducts() {
   const existingProducts = await stripe.products.list({ limit: 100 });
 
   for (const product of existingProducts.data) {
-    if (product.metadata?.plan === 'basic' || product.metadata?.plan === 'pro') {
+    if (product.metadata?.plan === 'basic' || product.metadata?.plan === 'pro' || product.metadata?.plan === 'enterprise') {
       console.log(`Archiving old product: ${product.name} (${product.id})`);
       const prices = await stripe.prices.list({ product: product.id, limit: 100 });
       for (const price of prices.data) {
@@ -72,11 +72,30 @@ async function seedStripeProducts() {
   console.log('  Monthly price:', proMonthly.id, '¥4,500/月');
   console.log('  Annual price:', proAnnual.id, '¥45,000/年');
 
+  console.log('Creating Enterprise plan product...');
+  const enterpriseProduct = await stripe.products.create({
+    name: 'DealCoach Enterprise',
+    description: '法人向け全機能利用可能プラン（1アカウントあたり）',
+    metadata: { plan: 'enterprise' },
+  });
+
+  const enterpriseMonthly = await stripe.prices.create({
+    product: enterpriseProduct.id,
+    unit_amount: 10000,
+    currency: 'jpy',
+    recurring: { interval: 'month' },
+    metadata: { plan: 'enterprise', billingCycle: 'monthly' },
+  });
+
+  console.log('Enterprise plan created:', enterpriseProduct.id);
+  console.log('  Monthly price:', enterpriseMonthly.id, '¥10,000/月 (per seat)');
+
   console.log('\n=== UPDATE pricing.tsx with these price IDs ===');
   console.log(`Basic Monthly: ${basicMonthly.id}`);
   console.log(`Basic Annual: ${basicAnnual.id}`);
   console.log(`Pro Monthly: ${proMonthly.id}`);
   console.log(`Pro Annual: ${proAnnual.id}`);
+  console.log(`Enterprise Monthly: ${enterpriseMonthly.id}`);
 
   console.log('\nStripe product seeding complete!');
 }

@@ -69,8 +69,10 @@ export interface IStorage {
 
   createOrganization(data: InsertOrganization): Promise<Organization>;
   getOrganization(id: number): Promise<Organization | undefined>;
+  updateOrganization(id: number, data: Partial<Organization>): Promise<Organization | undefined>;
   getOrganizationByInviteCode(code: string): Promise<Organization | undefined>;
   getUserOrganizations(userId: string): Promise<(Organization & { role: string })[]>;
+  getOrgMemberCount(orgId: number): Promise<number>;
 
   addOrgMember(data: InsertOrganizationMember): Promise<OrganizationMember>;
   getOrgMembers(orgId: number): Promise<(OrganizationMember & { displayName: string | null; email: string | null })[]>;
@@ -316,6 +318,16 @@ export class DatabaseStorage implements IStorage {
   async getOrganization(id: number): Promise<Organization | undefined> {
     const [org] = await db.select().from(organizations).where(eq(organizations.id, id));
     return org;
+  }
+
+  async updateOrganization(id: number, data: Partial<Organization>): Promise<Organization | undefined> {
+    const [org] = await db.update(organizations).set(data).where(eq(organizations.id, id)).returning();
+    return org;
+  }
+
+  async getOrgMemberCount(orgId: number): Promise<number> {
+    const members = await db.select().from(organizationMembers).where(eq(organizationMembers.orgId, orgId));
+    return members.length;
   }
 
   async getOrganizationByInviteCode(code: string): Promise<Organization | undefined> {

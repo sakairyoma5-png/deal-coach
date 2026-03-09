@@ -1222,10 +1222,86 @@ ${conversationText}
       const inviteCode = Math.random().toString(36).substring(2, 10) + Date.now().toString(36);
       const org = await storage.createOrganization({ name: name.trim(), createdBy: userId, inviteCode });
       await storage.addOrgMember({ orgId: org.id, userId, role: "admin" });
+
+      const stripe = await getUncachableStripeClient();
+      const products = await stripe.products.list({ active: true, limit: 20 });
+      const enterpriseProduct = products.data.find((p) => p.metadata?.plan === "enterprise") ||
+        products.data.find((p) => p.name === "DealCoach Enterprise");
+
+      if (enterpriseProduct) {
+        const prices = await stripe.prices.list({ product: enterpriseProduct.id, active: true, limit: 5 });
+        const monthlyPrice = prices.data.find((p) => p.recurring?.interval === "month");
+
+        if (monthlyPrice) {
+          const customer = await stripe.customers.create({
+            metadata: { userId, orgId: String(org.id) },
+            name: name.trim(),
+          });
+
+          await storage.updateOrganization(org.id, {
+            stripeCustomerId: customer.id,
+          });
+
+          const baseUrl = `${req.protocol}://${req.get("host")}`;
+          const session = await stripe.checkout.sessions.create({
+            customer: customer.id,
+            payment_method_types: ["card"],
+            line_items: [{ price: monthlyPrice.id, quantity: 1 }],
+            mode: "subscription",
+            success_url: `${baseUrl}/org/${org.id}/settings?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+            cancel_url: `${baseUrl}/org?canceled=true`,
+            metadata: { userId, orgId: String(org.id), plan: "enterprise" },
+          });
+
+          return res.json({ ...org, checkoutUrl: session.url });
+        }
+      }
+
       res.json(org);
     } catch (error) {
       console.error("Error creating organization:", error);
       res.status(500).json({ message: "組織の作成に失敗しました" });
+    }
+  });
+
+  app.post("/api/org/:id/checkout-success", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const orgId = parseInt(req.params.id);
+      const { sessionId } = req.body;
+
+      const role = await storage.getOrgMemberRole(orgId, userId);
+      if (role !== "admin") return res.status(403).json({ message: "管理者のみ実行できます" });
+
+      const stripe = await getUncachableStripeClient();
+      const session = await stripe.checkout.sessions.retrieve(sessionId);
+
+      if (session.metadata?.orgId !== String(orgId)) {
+        return res.status(403).json({ message: "この決済セッションはこの組織に対応していません" });
+      }
+      if (session.metadata?.userId !== userId) {
+        return res.status(403).json({ message: "この決済セッションの所有者ではありません" });
+      }
+
+      if (session.payment_status === "paid" && session.subscription) {
+        const subscriptionId = typeof session.subscription === "string"
+          ? session.subscription
+          : session.subscription.id;
+
+        await storage.updateOrganization(orgId, {
+          stripeSubscriptionId: subscriptionId,
+          subscriptionStatus: "active",
+          stripeCustomerId: typeof session.customer === "string" ? session.customer : session.customer?.id || null,
+        });
+
+        const org = await storage.getOrganization(orgId);
+        return res.json(org);
+      }
+
+      res.status(400).json({ message: "決済が完了していません" });
+    } catch (error) {
+      console.error("Error processing checkout success:", error);
+      res.status(500).json({ message: "決済の確認に失敗しました" });
     }
   });
 
@@ -1261,6 +1337,9 @@ ${conversationText}
       if (role !== "admin") return res.status(403).json({ message: "管理者のみ招待できます" });
       const org = await storage.getOrganization(orgId);
       if (!org) return res.status(404).json({ message: "組織が見つかりません" });
+      if (org.subscriptionStatus !== "active") {
+        return res.status(400).json({ message: "法人プランが有効ではありません。決済を完了してください。" });
+      }
       res.json({ inviteCode: org.inviteCode });
     } catch (error) {
       res.status(500).json({ message: "招待コードの取得に失敗しました" });
@@ -1273,9 +1352,37 @@ ${conversationText}
       const { code } = req.params;
       const org = await storage.getOrganizationByInviteCode(code);
       if (!org) return res.status(404).json({ message: "招待コードが無効です" });
+
+      const existingRole = await storage.getOrgMemberRole(org.id, userId);
+      if (existingRole) return res.status(400).json({ message: "既にこの組織に参加しています" });
+
+      if (org.subscriptionStatus !== "active" || !org.stripeSubscriptionId) {
+        return res.status(400).json({ message: "この組織の法人プランが有効ではありません。管理者にお問い合わせください。" });
+      }
+
       await storage.addOrgMember({ orgId: org.id, userId, role: "member" });
+
+      try {
+        const stripe = await getUncachableStripeClient();
+        const newMemberCount = await storage.getOrgMemberCount(org.id);
+        const subscription = await stripe.subscriptions.retrieve(org.stripeSubscriptionId);
+
+        await stripe.subscriptions.update(org.stripeSubscriptionId, {
+          items: [{
+            id: subscription.items.data[0].id,
+            quantity: newMemberCount,
+          }],
+          proration_behavior: "create_prorations",
+        });
+      } catch (stripeError) {
+        console.error("Error updating Stripe seat count on join:", stripeError);
+        await storage.removeOrgMember(org.id, userId);
+        return res.status(500).json({ message: "課金処理に失敗しました。管理者にお問い合わせください。" });
+      }
+
       res.json(org);
-    } catch (error) {
+    } catch (error: any) {
+      console.error("Error joining organization:", error);
       res.status(500).json({ message: "組織への参加に失敗しました" });
     }
   });
@@ -1318,7 +1425,30 @@ ${conversationText}
       if (currentRole !== "admin" && currentUserId !== targetUserId) {
         return res.status(403).json({ message: "管理者のみメンバーを削除できます" });
       }
+
+      const org = await storage.getOrganization(orgId);
+
       await storage.removeOrgMember(orgId, targetUserId);
+
+      if (org?.stripeSubscriptionId && org.subscriptionStatus === "active") {
+        const stripe = await getUncachableStripeClient();
+        const memberCount = await storage.getOrgMemberCount(orgId);
+
+        if (memberCount === 0) {
+          await stripe.subscriptions.cancel(org.stripeSubscriptionId);
+          await storage.updateOrganization(orgId, { subscriptionStatus: "canceled" });
+        } else {
+          const subscription = await stripe.subscriptions.retrieve(org.stripeSubscriptionId);
+          await stripe.subscriptions.update(org.stripeSubscriptionId, {
+            items: [{
+              id: subscription.items.data[0].id,
+              quantity: memberCount,
+            }],
+            proration_behavior: "create_prorations",
+          });
+        }
+      }
+
       res.json({ success: true });
     } catch (error) {
       res.status(500).json({ message: "メンバーの削除に失敗しました" });

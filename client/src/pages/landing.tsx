@@ -305,12 +305,15 @@ export default function LandingPage() {
                 </div>
                 <span className="font-semibold text-sm">DealCoach</span>
               </div>
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-4 flex-wrap justify-center">
                 <a href="/guide" className="text-xs text-muted-foreground hover:text-foreground transition-colors" data-testid="link-footer-guide">
                   使い方ガイド
                 </a>
                 <a href="/terms" className="text-xs text-muted-foreground hover:text-foreground transition-colors" data-testid="link-footer-terms">
                   利用規約
+                </a>
+                <a href="/privacy" className="text-xs text-muted-foreground hover:text-foreground transition-colors" data-testid="link-footer-privacy">
+                  プライバシーポリシー
                 </a>
                 <a href="/legal" className="text-xs text-muted-foreground hover:text-foreground transition-colors" data-testid="link-footer-legal">
                   特定商取引法に基づく表記

@@ -66,18 +66,21 @@ export default function PricingPage() {
   const currentPlan = subscription?.plan || "free";
   const hasStripeSubscription = !!subscription?.stripeSubscriptionId;
 
+  const redirectedRef = { current: false };
   const checkoutMutation = useMutation({
     mutationFn: async ({ priceId, plan, billingCycle }: { priceId: string; plan: string; billingCycle: string }) => {
       const res = await apiRequest("POST", "/api/stripe/checkout", { priceId, plan, billingCycle });
       return res.json();
     },
     onSuccess: (data: any) => {
-      if (data.url) {
+      if (data.url && !redirectedRef.current) {
+        redirectedRef.current = true;
         window.location.href = data.url;
       }
     },
     onError: () => {
       setCheckingOutPlan(null);
+      redirectedRef.current = false;
       toast({ title: "エラー", description: "チェックアウトの作成に失敗しました。", variant: "destructive" });
     },
   });
@@ -163,7 +166,7 @@ export default function PricingPage() {
       navigate("/");
       return;
     }
-    if (plan.id === "free" || checkingOutPlan) return;
+    if (plan.id === "free" || checkingOutPlan || checkoutMutation.isPending) return;
 
     const priceId = getPriceId(plan.id);
     if (!priceId) return;

@@ -24,19 +24,25 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 7. Chat-based skill card practice: AI plays customer role in BtoB sales scenarios, multi-turn conversation with evaluation
 8. Skill diagnosis (4-axis: listening, questioning, empathy, closing)
 9. Pricing page (3 tiers: Free ¥0, Basic ¥3,000/月, Pro ¥4,500/月) - Stripe Checkout integration with monthly/annual billing
-10. Subscription management & cancellation via Stripe Customer Portal
+10. Enterprise/法人 plan: ¥10,000/user/month per-seat billing via Stripe (organization-level subscription)
+11. Subscription management & cancellation via Stripe Customer Portal
 11. Learning calendar: monthly view showing study history + scheduled studies with add/delete
 12. Mobile-first design with bottom navigation (Home, Skills, RP, Diag, Org)
 13. Dark/light mode toggle
 14. **Legal compliance**:
     - Terms of Service page (/terms) - Japanese SaaS terms
     - 特定商取引法に基づく表記 page (/legal) - legal business info
+    - Privacy Policy page (/privacy) - Japanese privacy policy
     - ToS consent gate: login → must agree to ToS before accessing any feature
     - tosAccepted + tosAcceptedAt tracked per user in DB
-    - Footer links on landing page to /terms and /legal
+    - Footer links on landing page to /terms, /legal, /privacy
 15. **Organization management** (corporate/B2B):
-    - Create organizations, invite members via invite code
+    - Create organizations with Stripe Checkout for enterprise plan (¥10,000/user/month)
+    - Per-seat billing: member join → quantity+1, member leave → quantity-1
+    - organizations table has stripeCustomerId, stripeSubscriptionId, subscriptionStatus
     - Admin/member roles
+    - Subscription status displayed on org settings page
+    - Invite blocked if subscription not active
     - Admin dashboard: member scores, weekly practice counts, non-participants, completion rates
     - Practice log auto-recording (roleplay + skill card practice)
     - Curriculum assignment by admin (weekly skill cards)
@@ -45,7 +51,7 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 15. Profile page with display name editing
 
 ## Project Structure
-- `client/src/pages/` - Landing, Dashboard, Skills, Roleplay, Diagnosis, Pricing, Calendar, Profile, Organization, OrgSettings, OrgDashboard, Terms, Legal, TosConsent, Guide
+- `client/src/pages/` - Landing, Dashboard, Skills, Roleplay, Diagnosis, Pricing, Calendar, Profile, Organization, OrgSettings, OrgDashboard, Terms, Legal, Privacy, TosConsent, Guide
 - `client/src/components/` - ThemeProvider, ThemeToggle, BottomNav, NotificationBell, UI components
 - `server/routes.ts` - All API endpoints (individual + organization)
 - `server/storage.ts` - DatabaseStorage with Drizzle (IStorage interface)
@@ -93,11 +99,12 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 - `GET /api/calendar/scheduled?month=YYYY-MM` - Scheduled studies for month
 - `POST /api/calendar/schedule` - Add scheduled study
 - `DELETE /api/calendar/schedule/:id` - Delete scheduled study
-- `POST /api/org` - Create organization
+- `POST /api/org` - Create organization (returns checkoutUrl for Stripe Checkout)
+- `POST /api/org/:id/checkout-success` - Sync subscription after checkout (body: { sessionId })
 - `GET /api/org` - User's organizations
 - `GET /api/org/:id` - Organization detail
 - `POST /api/org/:id/invite` - Get invite code (admin only)
-- `POST /api/org/join/:code` - Join via invite code
+- `POST /api/org/join/:code` - Join via invite code (auto-updates Stripe seat count)
 - `GET /api/org/:id/members` - Member list
 - `PATCH /api/org/:id/members/:userId` - Change member role (admin only)
 - `DELETE /api/org/:id/members/:userId` - Remove member (admin only)
@@ -114,7 +121,7 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 users, sessions (auth), subscriptions, skill_cards, roleplay_scenarios, roleplay_sessions, skill_diagnoses, user_progress, user_skill_progress, skill_card_study_logs, scheduled_studies, conversations, messages, **organizations**, **organization_members**, **practice_logs**, **curriculum_assignments**, **org_notifications**
 
 ## Stripe Integration
-- Products created via Stripe API (seed-stripe.ts): DealCoach Basic, DealCoach Pro
+- Products created via Stripe API (seed-stripe.ts): DealCoach Basic, DealCoach Pro, DealCoach Enterprise
 - Each product has monthly and annual prices in JPY
 - Price IDs are fetched dynamically via /api/stripe/prices (no hardcoded IDs)
 - Products looked up by metadata.plan ("basic"/"pro") with name fallback
