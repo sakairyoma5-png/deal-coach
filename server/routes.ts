@@ -363,7 +363,6 @@ ${recentStudyContext}
       const analysis = await openai.chat.completions.create({
         model: "gpt-5-nano",
         messages: [
-          { role: "system", content: "あなたは20年以上のBtoB営業経験を持つベテラン営業マネージャーです。実際の会話の発言を引用して具体的に評価してください。汎用的なフィードバックは不要です。必ずJSON形式のみで回答してください。" },
           { role: "user", content: analysisPrompt },
         ],
         max_completion_tokens: 1536,
@@ -391,11 +390,11 @@ ${recentStudyContext}
       const diagnosis = await storage.createDiagnosis({
         userId,
         sessionId,
-        listening: result.listening || 50,
-        questioning: result.questioning || 50,
-        empathy: result.empathy || 50,
-        closing: result.closing || 50,
-        overallScore: result.overallScore || 50,
+        listening: result.listening ?? 50,
+        questioning: result.questioning ?? 50,
+        empathy: result.empathy ?? 50,
+        closing: result.closing ?? 50,
+        overallScore: result.overallScore ?? 50,
         feedback: result.feedback,
         feedbackJa: result.feedbackJa,
         strengths: result.strengths || [],
@@ -407,11 +406,11 @@ ${recentStudyContext}
         orgId: userOrgId,
         userId,
         sessionId,
-        score: result.overallScore || 50,
-        listening: result.listening || 50,
-        questioning: result.questioning || 50,
-        empathy: result.empathy || 50,
-        closing: result.closing || 50,
+        score: result.overallScore ?? 50,
+        listening: result.listening ?? 50,
+        questioning: result.questioning ?? 50,
+        empathy: result.empathy ?? 50,
+        closing: result.closing ?? 50,
         practiceType: "roleplay",
       });
 
@@ -485,13 +484,13 @@ ${recentStudyContext}
 ${conversationText}
 
 【評価結果】
-- 傾聴力: ${feedback.listening}/100
-- 質問力: ${feedback.questioning}/100
-- 共感力: ${feedback.empathy}/100
-- クロージング力: ${feedback.closing}/100
-- 総合スコア: ${feedback.overallScore}/100
-- 強み: ${(feedback.strengths || []).join("、")}
-- 改善点: ${(feedback.weaknesses || []).join("、")}
+- 傾聴力: ${feedback.listening ?? 50}/100
+- 質問力: ${feedback.questioning ?? 50}/100
+- 共感力: ${feedback.empathy ?? 50}/100
+- クロージング力: ${feedback.closing ?? 50}/100
+- 総合スコア: ${feedback.overallScore ?? 50}/100
+- 強み: ${(feedback.strengths || []).length > 0 ? (feedback.strengths || []).join("、") : "（会話内容から判断してください）"}
+- 改善点: ${(feedback.weaknesses || []).length > 0 ? (feedback.weaknesses || []).join("、") : "（会話内容から判断してください）"}
 ${studyContext}
 
 コーチングルール:
