@@ -154,8 +154,10 @@ users, sessions (auth), subscriptions, skill_cards, roleplay_scenarios, roleplay
 ## AI Model Constraints (gpt-5-nano)
 - NEVER use `role: "system"` messages — returns empty content in both streaming and json_object modes
 - NEVER use `stream: true` — streaming returns empty content regardless of message format; use non-streaming calls instead
+- NEVER use multi-message conversations — only single `{ role: "user" }` messages work reliably; multi-turn history returns empty content
 - NEVER use `response_format: { type: "json_object" }` for complex/long prompts — returns empty `{}`
 - Instead: merge system instructions into the user message, and parse JSON manually from response text
+- For multi-turn chat: flatten conversation history into a single user message with labeled turns (営業: / 顧客: etc.)
 - For chat-style responses: use non-streaming API call and send result as single SSE event to preserve frontend SSE parsing
 - For JSON responses: use regex `rawText.match(/\{[\s\S]*\}/)` to extract JSON from free-form response
 
