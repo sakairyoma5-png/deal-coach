@@ -937,48 +937,16 @@ ${conversationText}
         `${m.role === 'customer' ? customerName || 'お客様' : '営業'}: ${m.content}`
       ).join('\n');
 
-      const prompt = `以下のBtoB営業の練習会話を、ベテラン営業マネージャーの視点で詳しく評価してください。
-
-対象スキル: ${card.titleJa}
-スキル説明: ${card.descriptionJa}
-このスキルの要点: ${(card.tipsJa || []).join('、')}
-
-【シナリオ】
-${scenario}
-
-【実際の会話内容】
-${conversationText}
-
-重要な評価ルール:
-1. goodPointsとimprovementsでは、必ず実際の会話から具体的な発言を「」で引用してください（例：「○○という質問は顧客の本音を引き出す良い質問でした」）
-2. improvementsでは「こう言えばよかった」という代替の発言例を必ず含めてください（例：「『予算はいくらですか？』ではなく『ご予算のイメージがあれば、それに合わせた提案をさせていただきたいのですが』と聞くと自然です」）
-3. modelConversationは、スキルカードの良い例のコピペではなく、このシナリオ・この顧客・この状況に合わせたオリジナルの模範会話を作成してください。営業の発言を4-6文で、顧客との対話形式で書いてください。
-4. overallFeedbackは抽象的な感想ではなく、「○○の場面で○○を使えていたのは良い。一方、○○の質問に対して○○と答えたのは機会損失だった」のような具体的なコメントにしてください。
-
-必ず以下のJSON形式のみで回答してください:
-{
-  "score": 3,
-  "goodPoints": ["実際の発言を引用した具体的な良いポイント1", "ポイント2"],
-  "improvements": ["具体的な改善点と代替発言例1", "改善点と代替発言例2"],
-  "overallFeedback": "具体的な場面に言及した総合評価（3-4文）",
-  "modelConversation": "このシナリオでの模範的な営業と顧客の対話例（営業：と顧客：を交互に、4-6往復で）"
-}
-
-評価基準:
-- score: 1〜5（${card.titleJa}のスキルをどれだけ効果的に活用できたか。3が平均的、5は卓越）
-- 厳しすぎず甘すぎない現実的な評価をしてください`;
+      const prompt = `あなたは20年以上の法人営業経験を持つベテラン営業マネージャーです。部下の営業トレーニングの会話を評価してください。対象スキル: ${card.titleJa}（${card.descriptionJa}）。要点: ${(card.tipsJa || []).join('、')}。シナリオ: ${scenario}。実際の会話: ${conversationText}。以下のJSON形式で回答してください。{"score":3,"goodPoints":["実際の発言を引用した良いポイント"],"improvements":["実際の発言を引用した改善点"],"overallFeedback":"具体的な場面に言及した総合評価","conversationImprovements":[{"yourStatement":"営業の実際の発言を引用","betterVersion":"より効果的な言い方の例","reason":"なぜ改善版が効果的か"}]}。scoreは1-5（3が平均）。conversationImprovementsは営業の発言から2-3個選び、具体的な改善例を示してください。`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
-        messages: [
-          { role: "system", content: "あなたは20年以上の法人営業経験を持つベテラン営業マネージャーです。部下の営業トレーニングの会話を評価しています。評価では必ず実際の会話の具体的な発言を引用し、改善案は代替の発言例を含めてください。スキルカードの例文をそのままコピーせず、このシナリオ固有のオリジナルのフィードバックを作成してください。必ずJSON形式のみで回答してください。" },
-          { role: "user", content: prompt },
-        ],
-        max_completion_tokens: 2048,
+        messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
       });
 
       const rawEval = response.choices[0]?.message?.content || '{}';
+      console.log("[practice/evaluate] AI raw response:", rawEval.slice(0, 500));
       let evaluation;
       try {
         const parsed = JSON.parse(rawEval);
@@ -991,14 +959,24 @@ ${conversationText}
           : Array.isArray(parsed.改善点) ? parsed.改善点
           : [];
 
-        const rawModelConv = (parsed.modelConversation || parsed.model_conversation || parsed.模範会話 || parsed.modelAnswer || parsed.model_answer || "").trim();
+        let convImprovements: { yourStatement: string; betterVersion: string; reason: string }[] = [];
+        const rawConvImps = parsed.conversationImprovements || parsed.conversation_improvements || [];
+        if (Array.isArray(rawConvImps)) {
+          convImprovements = rawConvImps
+            .filter((item: any) => item && (item.yourStatement || item.your_statement))
+            .map((item: any) => ({
+              yourStatement: item.yourStatement || item.your_statement || "",
+              betterVersion: item.betterVersion || item.better_version || "",
+              reason: item.reason || "",
+            }));
+        }
 
         evaluation = {
           score: isNaN(score) ? 3 : Math.max(1, Math.min(5, score)),
           goodPoints: goodPoints.length > 0 ? goodPoints : ["会話に積極的に取り組んだ点が評価できます。"],
           improvements: improvements.length > 0 ? improvements : ["より具体的な提案を含めるとさらに効果的です。"],
           overallFeedback: (parsed.overallFeedback || parsed.overall_feedback || parsed.総合評価 || parsed.feedback || "").trim() || "練習お疲れさまでした。繰り返し練習することでスキルが向上します。",
-          modelConversation: rawModelConv || card.goodExampleJa || `このシナリオでは「${card.titleJa}」のスキルを使い、お客様の課題に寄り添った具体的な提案を行うことが理想的です。`,
+          conversationImprovements: convImprovements,
         };
       } catch {
         evaluation = {
@@ -1006,7 +984,7 @@ ${conversationText}
           goodPoints: ["会話に積極的に取り組んだ点が評価できます。"],
           improvements: ["より具体的な発言例を含めると、実践で使えるスキルが身につきます。"],
           overallFeedback: "評価の生成に一部失敗しましたが、練習を続けることが大切です。",
-          modelConversation: card.goodExampleJa || "",
+          conversationImprovements: [],
         };
       }
 
