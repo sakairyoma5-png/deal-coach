@@ -72,6 +72,8 @@ function SkillCardDetail({
   const [practiceScenario, setPracticeScenario] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerRole, setCustomerRole] = useState("");
+  const [customerPersonality, setCustomerPersonality] = useState("");
+  const [hiddenConcerns, setHiddenConcerns] = useState("");
   const [targetTurns, setTargetTurns] = useState(4);
   const [currentTurn, setCurrentTurn] = useState(0);
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -93,7 +95,9 @@ function SkillCardDetail({
       setPracticeScenario(data.scenario || "");
       setCustomerName(data.customerName || "田中部長");
       setCustomerRole(data.customerRole || "");
-      setTargetTurns(data.targetTurns || 4);
+      setCustomerPersonality(data.customerPersonality || "");
+      setHiddenConcerns(data.hiddenConcerns || "");
+      setTargetTurns(data.targetTurns || 5);
       setCurrentTurn(1);
       setChatMessages([{ role: 'customer', content: data.firstMessage || "お話を聞かせてください。" }]);
       setPracticeState('chatting');
@@ -114,6 +118,8 @@ function SkillCardDetail({
         scenario: practiceScenario,
         customerName,
         customerRole,
+        customerPersonality,
+        hiddenConcerns,
         currentTurn: nextTurn,
         targetTurns,
       });
