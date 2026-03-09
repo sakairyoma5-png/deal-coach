@@ -71,6 +71,8 @@ export interface IStorage {
   getOrganization(id: number): Promise<Organization | undefined>;
   updateOrganization(id: number, data: Partial<Organization>): Promise<Organization | undefined>;
   getOrganizationByInviteCode(code: string): Promise<Organization | undefined>;
+  getOrganizationByStripeCustomerId(stripeCustomerId: string): Promise<Organization | undefined>;
+  getOrganizationByStripeSubscriptionId(subscriptionId: string): Promise<Organization | undefined>;
   getUserOrganizations(userId: string): Promise<(Organization & { role: string })[]>;
   getOrgMemberCount(orgId: number): Promise<number>;
 
@@ -332,6 +334,16 @@ export class DatabaseStorage implements IStorage {
 
   async getOrganizationByInviteCode(code: string): Promise<Organization | undefined> {
     const [org] = await db.select().from(organizations).where(eq(organizations.inviteCode, code));
+    return org;
+  }
+
+  async getOrganizationByStripeCustomerId(stripeCustomerId: string): Promise<Organization | undefined> {
+    const [org] = await db.select().from(organizations).where(eq(organizations.stripeCustomerId, stripeCustomerId));
+    return org;
+  }
+
+  async getOrganizationByStripeSubscriptionId(subscriptionId: string): Promise<Organization | undefined> {
+    const [org] = await db.select().from(organizations).where(eq(organizations.stripeSubscriptionId, subscriptionId));
     return org;
   }
 
