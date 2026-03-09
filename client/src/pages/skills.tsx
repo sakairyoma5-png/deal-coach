@@ -392,12 +392,23 @@ function SkillCardDetail({
 
           {practiceState !== 'idle' && (
             <div className="space-y-3 mt-1">
-              <div className="bg-muted/50 rounded-lg p-3 space-y-2">
+              <div className="bg-muted/50 rounded-lg p-3 space-y-2.5">
                 <div>
-                  <p className="text-[10px] font-semibold text-primary uppercase tracking-wider mb-0.5">シナリオ</p>
+                  <p className="text-[10px] font-semibold text-primary uppercase tracking-wider mb-0.5">商談背景</p>
                   <p className="text-xs text-foreground leading-relaxed">{practiceScenario}</p>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="border-t pt-2">
+                  <p className="text-[10px] font-semibold text-primary uppercase tracking-wider mb-1">顧客企業・担当者</p>
+                  <p className="text-xs text-foreground font-medium">{customerName}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">{customerRole}</p>
+                  {customerPersonality && (
+                    <p className="text-[11px] text-foreground/80 mt-1">
+                      <span className="text-[10px] font-semibold text-muted-foreground">タイプ: </span>
+                      {customerPersonality}
+                    </p>
+                  )}
+                </div>
+                <div className="border-t pt-2 grid grid-cols-2 gap-2">
                   <div>
                     <p className="text-[10px] font-semibold text-muted-foreground">あなたの役割</p>
                     <p className="text-xs text-foreground">{salesRole || "法人営業担当"}</p>
@@ -408,10 +419,6 @@ function SkillCardDetail({
                   </div>
                 </div>
                 <div className="border-t pt-1.5">
-                  <p className="text-[10px] font-semibold text-muted-foreground">商談相手</p>
-                  <p className="text-xs text-foreground"><span className="font-medium">{customerName}</span>（{customerRole}）</p>
-                </div>
-                <div>
                   <p className="text-[10px] font-semibold text-muted-foreground">練習スキル</p>
                   <p className="text-xs text-primary font-medium">{card.titleJa}</p>
                 </div>
