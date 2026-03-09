@@ -294,6 +294,8 @@ ${customDifficultyInstructions[customDifficulty] || customDifficultyInstructions
         }
       }
 
+      console.log(`[roleplay/message] sessionId=${sessionId} response length=${fullResponse.length} preview="${fullResponse.slice(0, 100)}"`);
+
       msgs.push({ role: "assistant", content: fullResponse });
       await storage.updateSession(sessionId, { messages: msgs });
 
@@ -366,13 +368,15 @@ ${recentStudyContext}
           { role: "user", content: analysisPrompt },
         ],
         max_completion_tokens: 1536,
-        response_format: { type: "json_object" },
       });
 
-      const resultText = analysis.choices[0]?.message?.content || "{}";
+      const rawText = analysis.choices[0]?.message?.content || "";
+      console.log("[roleplay/end] AI raw response:", rawText.slice(0, 300));
       let result;
       try {
-        result = JSON.parse(resultText);
+        const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+        result = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
+        if (!result || typeof result.listening !== "number") throw new Error("Invalid JSON structure");
       } catch {
         result = {
           listening: 50, questioning: 50, empathy: 50, closing: 50,
@@ -508,13 +512,13 @@ ${studyContext}
       const initialAnalysis = await openai.chat.completions.create({
         model: "gpt-5-nano",
         messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: "今のロープレの結果を振り返ってください。特に良かった点と、具体的にどう改善できるかを教えてください。" },
+          { role: "user", content: `${systemPrompt}\n\n---\n\n今のロープレの結果を振り返ってください。特に良かった点と、具体的にどう改善できるかを教えてください。` },
         ],
         max_completion_tokens: 1536,
       });
 
       const coachMessage = initialAnalysis.choices[0]?.message?.content || "フィードバックの生成に失敗しました。";
+      console.log("[feedback/start] coach message length:", coachMessage.length, "preview:", coachMessage.slice(0, 100));
 
       const skillCardAnalysisPrompt = `以下の営業ロープレの改善点を踏まえ、学習すべき営業スキルや心理学的概念を2-3個提案してください。
 
@@ -557,12 +561,14 @@ ${studyContext}
         model: "gpt-5-nano",
         messages: [{ role: "user", content: skillCardAnalysisPrompt }],
         max_completion_tokens: 2048,
-        response_format: { type: "json_object" },
       });
 
       let generatedCards: any[] = [];
       try {
-        const skillResult = JSON.parse(skillAnalysis.choices[0]?.message?.content || '{"skills":[]}');
+        const skillRawText = skillAnalysis.choices[0]?.message?.content || "";
+        console.log("[feedback/start] skill analysis length:", skillRawText.length);
+        const skillJsonMatch = skillRawText.match(/\{[\s\S]*\}/);
+        const skillResult = skillJsonMatch ? JSON.parse(skillJsonMatch[0]) : { skills: [] };
         const skills = skillResult.skills || [];
 
         for (const skill of skills) {
@@ -608,7 +614,7 @@ ${studyContext}
       }
 
       const feedbackChatMessages = [
-        { role: "system", content: systemPrompt },
+        { role: "user", content: systemPrompt },
         { role: "assistant", content: coachMessage },
       ];
 
