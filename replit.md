@@ -155,7 +155,6 @@ users, sessions (auth), subscriptions, skill_cards, roleplay_scenarios, roleplay
 - `npm run dev` - Start dev server
 - `npm run db:push` - Push schema changes
 - `npx tsx server/seed-stripe.ts` - Seed Stripe products (run once)
-- `npx tsx scripts/capture-guide-screenshots.ts` - Capture guide page screenshots (uses Playwright with mocked auth)
 
 ## User Preferences
 - Japanese UI language
