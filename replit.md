@@ -45,7 +45,7 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 15. Profile page with display name editing
 
 ## Project Structure
-- `client/src/pages/` - Landing, Dashboard, Skills, Roleplay, Diagnosis, Pricing, Calendar, Profile, Organization, OrgSettings, OrgDashboard, Terms, Legal, TosConsent
+- `client/src/pages/` - Landing, Dashboard, Skills, Roleplay, Diagnosis, Pricing, Calendar, Profile, Organization, OrgSettings, OrgDashboard, Terms, Legal, TosConsent, Guide
 - `client/src/components/` - ThemeProvider, ThemeToggle, BottomNav, NotificationBell, UI components
 - `server/routes.ts` - All API endpoints (individual + organization)
 - `server/storage.ts` - DatabaseStorage with Drizzle (IStorage interface)

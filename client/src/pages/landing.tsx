@@ -120,6 +120,9 @@ export default function LandingPage() {
             <span className="font-bold text-lg tracking-tight" data-testid="text-logo">DealCoach</span>
           </div>
           <div className="flex items-center gap-2">
+            <a href="/guide" className="text-sm text-muted-foreground hover:text-foreground transition-colors hidden sm:inline" data-testid="link-header-guide">
+              使い方ガイド
+            </a>
             <ThemeToggle />
             <a href="/api/login">
               <Button variant="outline" data-testid="button-login">
@@ -303,6 +306,9 @@ export default function LandingPage() {
                 <span className="font-semibold text-sm">DealCoach</span>
               </div>
               <div className="flex items-center gap-4">
+                <a href="/guide" className="text-xs text-muted-foreground hover:text-foreground transition-colors" data-testid="link-footer-guide">
+                  使い方ガイド
+                </a>
                 <a href="/terms" className="text-xs text-muted-foreground hover:text-foreground transition-colors" data-testid="link-footer-terms">
                   利用規約
                 </a>
