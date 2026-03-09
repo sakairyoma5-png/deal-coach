@@ -1083,6 +1083,9 @@ ${conversationText}
         success_url: `${baseUrl}/pricing?success=true`,
         cancel_url: `${baseUrl}/pricing?canceled=true`,
         metadata: { userId, plan: plan || "basic", billingCycle: billingCycle || "monthly" },
+        subscription_data: {
+          metadata: { userId, plan: plan || "basic", billingCycle: billingCycle || "monthly" },
+        },
       });
 
       res.json({ url: session.url });
@@ -1128,15 +1131,6 @@ ${conversationText}
       const stripeSub = result.rows[0] as any;
 
       if (stripeSub) {
-        const priceResult = await db.execute(
-          sql`SELECT * FROM stripe.prices WHERE id = ANY(
-            SELECT jsonb_array_elements_text(
-              CASE WHEN jsonb_typeof(items) = 'array' THEN items
-              ELSE '[]'::jsonb END
-            )
-          ) LIMIT 1`
-        );
-
         let plan = "basic";
         let billingCycle = "monthly";
 
@@ -1144,6 +1138,26 @@ ${conversationText}
           const meta = typeof stripeSub.metadata === 'string' ? JSON.parse(stripeSub.metadata) : stripeSub.metadata;
           if (meta.plan) plan = meta.plan;
           if (meta.billingCycle) billingCycle = meta.billingCycle;
+        }
+
+        if (plan === "basic") {
+          try {
+            const items = typeof stripeSub.items === 'string' ? JSON.parse(stripeSub.items) : stripeSub.items;
+            const itemsData = items?.data || [];
+            if (itemsData.length > 0) {
+              const priceId = itemsData[0]?.price?.id || itemsData[0]?.plan?.id;
+              if (priceId) {
+                const priceMeta = itemsData[0]?.price?.metadata || itemsData[0]?.plan?.metadata;
+                if (priceMeta) {
+                  const pm = typeof priceMeta === 'string' ? JSON.parse(priceMeta) : priceMeta;
+                  if (pm.plan) plan = pm.plan;
+                  if (pm.billingCycle) billingCycle = pm.billingCycle;
+                }
+              }
+            }
+          } catch (e) {
+            console.error("Error parsing items for plan detection:", e);
+          }
         }
 
         const updated = await storage.upsertSubscription({
