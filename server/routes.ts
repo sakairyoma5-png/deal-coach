@@ -884,12 +884,19 @@ JSON形式で回答してください:
         `${m.role === 'customer' ? customerName : '営業'}: ${m.content}`
       ).join('\n');
 
-      const prompt = `あなたは${customerRole}の「${customerName}」です。BtoB商談のお客様役を演じてください。シナリオ: ${scenario}。性格: ${customerPersonality || "慎重派"}。隠れた懸念（自分からは言わない）: ${hiddenConcerns || "予算の問題"}。フェーズ: ${turnPhase}（${safeCurrent}/${safeTurns}ターン目）。${isLastTurn ? '最終ターンです。感想と次のアクションを伝えてください。' : ''}
+      const prompt = `あなたは${customerRole}の「${customerName}」です。BtoB商談のお客様役を演じてください。シナリオ: ${scenario}。性格: ${customerPersonality || "慎重派"}。隠れた懸念（自分からは言わない）: ${hiddenConcerns || "予算の問題"}。フェーズ: ${turnPhase}（${safeCurrent}/${safeTurns}ターン目）。${isLastTurn ? '最終ターンです。率直な感想と次のアクションを伝えてください。' : ''}
+
+重要な演技ルール:
+- あなたは「お客様」です。自分から解決策やツール名を提案しないでください
+- 営業の質問に対して自社の現状や課題を話してください
+- 簡単に納得せず、「本当にうちに合うのか？」「前も似たツールで失敗した」「上司を説得できるか不安」など懸念を示してください
+- 専門的・技術的な長文は避け、普通のビジネスパーソンらしく1-3文で短く自然に話してください
+- ROIや導入計画の詳細を自分から求めないでください。営業から聞かれたら答える程度にしてください
 
 これまでの会話:
 ${conversationText}
 
-上記を踏まえて、${customerName}として次の応答を2-4文で書いてください。前の発言と違う内容にしてください。応答のみを書いてください（名前や「」は不要）。`;
+${customerName}として次の応答を1-3文で短く書いてください。応答のみ（名前や「」は不要）。`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
@@ -933,11 +940,26 @@ ${conversationText}
         return res.status(404).json({ message: "Skill card not found" });
       }
 
+      const userStatements = messages
+        .filter((m: { role: string }) => m.role === 'user')
+        .map((m: { content: string }, i: number) => `営業発言${i + 1}: 「${m.content}」`)
+        .join('\n');
+
       const conversationText = messages.map((m: { role: string; content: string }) =>
-        `${m.role === 'customer' ? customerName || 'お客様' : '営業'}: ${m.content}`
+        `${m.role === 'customer' ? customerName || 'お客様' : '【営業】'}: ${m.content}`
       ).join('\n');
 
-      const prompt = `あなたは20年以上の法人営業経験を持つベテラン営業マネージャーです。部下の営業トレーニングの会話を評価してください。対象スキル: ${card.titleJa}（${card.descriptionJa}）。要点: ${(card.tipsJa || []).join('、')}。シナリオ: ${scenario}。実際の会話: ${conversationText}。以下のJSON形式で回答してください。{"score":3,"goodPoints":["実際の発言を引用した良いポイント"],"improvements":["実際の発言を引用した改善点"],"overallFeedback":"具体的な場面に言及した総合評価","conversationImprovements":[{"yourStatement":"営業の実際の発言を引用","betterVersion":"より効果的な言い方の例","reason":"なぜ改善版が効果的か"}]}。scoreは1-5（3が平均）。conversationImprovementsは営業の発言から2-3個選び、具体的な改善例を示してください。`;
+      const prompt = `あなたは営業マネージャーです。部下の営業トレーニングを評価してください。対象スキル: ${card.titleJa}（${card.descriptionJa}）。要点: ${(card.tipsJa || []).join('、')}。シナリオ: ${scenario}。
+
+会話全体:
+${conversationText}
+
+営業の発言一覧（評価対象はこれらのみ）:
+${userStatements}
+
+重要ルール: goodPoints・improvements・conversationImprovementsは全て「営業の発言」のみを対象にしてください。顧客の発言は評価しないでください。
+
+以下のJSON形式で回答してください。{"score":3,"goodPoints":["営業の発言を引用した良い点"],"improvements":["営業の発言を引用した改善点"],"overallFeedback":"営業の対応についての総合評価","conversationImprovements":[{"yourStatement":"営業の発言をそのまま引用","betterVersion":"より効果的な言い方","reason":"理由"}]}。scoreは1-5。conversationImprovementsは営業の発言から2-3個選んでください。`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
