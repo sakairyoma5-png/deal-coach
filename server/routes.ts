@@ -276,26 +276,20 @@ ${customDifficultyInstructions[customDifficulty] || customDifficultyInstructions
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
-      const streamMsgs = msgs.map((m: any) => m.role === "system" ? { role: "user", content: m.content } : m);
+      const apiMsgs = msgs.map((m: any) => m.role === "system" ? { role: "user", content: m.content } : m);
 
-      const stream = await openai.chat.completions.create({
+      const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
-        messages: streamMsgs,
-        stream: true,
+        messages: apiMsgs,
         max_completion_tokens: 512,
       });
 
-      let fullResponse = "";
-
-      for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content || "";
-        if (content) {
-          fullResponse += content;
-          res.write(`data: ${JSON.stringify({ content })}\n\n`);
-        }
-      }
-
+      const fullResponse = response.choices[0]?.message?.content || "";
       console.log(`[roleplay/message] sessionId=${sessionId} response length=${fullResponse.length} preview="${fullResponse.slice(0, 100)}"`);
+
+      if (fullResponse) {
+        res.write(`data: ${JSON.stringify({ content: fullResponse })}\n\n`);
+      }
 
       msgs.push({ role: "assistant", content: fullResponse });
       await storage.updateSession(sessionId, { messages: msgs });
@@ -648,23 +642,18 @@ ${studyContext}
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
-      const streamChatMsgs = chatMessages.map((m: any) => m.role === "system" ? { role: "user", content: m.content } : m);
+      const apiChatMsgs = chatMessages.map((m: any) => m.role === "system" ? { role: "user", content: m.content } : m);
 
-      const stream = await openai.chat.completions.create({
+      const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
-        messages: streamChatMsgs,
-        stream: true,
+        messages: apiChatMsgs,
         max_completion_tokens: 1536,
       });
 
-      let fullResponse = "";
+      const fullResponse = response.choices[0]?.message?.content || "";
 
-      for await (const chunk of stream) {
-        const content = chunk.choices[0]?.delta?.content || "";
-        if (content) {
-          fullResponse += content;
-          res.write(`data: ${JSON.stringify({ content })}\n\n`);
-        }
+      if (fullResponse) {
+        res.write(`data: ${JSON.stringify({ content: fullResponse })}\n\n`);
       }
 
       chatMessages.push({ role: "assistant", content: fullResponse });
