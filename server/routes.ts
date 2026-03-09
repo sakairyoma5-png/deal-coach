@@ -825,16 +825,18 @@ JSON形式で回答してください:
 - 会社名は具体的に（例：「東洋精密工業株式会社」「クラウドネクスト合同会社」など）
 - 顧客は具体的な課題・予算感・過去の経験・社内事情を持った人物にしてください
 - 顧客には隠れた本音や懸念（例：実は上司に反対されている、前のベンダーで失敗した、予算が限られている等）を設定してください
-- 最初の発言は「もう少し詳しく聞かせてください」のような汎用的なものではなく、具体的な状況や課題を含むものにしてください
+- 営業担当者の役割・会社・提案商品も具体的に設定してください
+- 商談の目的（初回ヒアリング、提案、クロージング等）も設定してください
 
 以下のJSON形式で回答してください:
 {
   "scenario": "商談の背景説明（業種・会社規模・具体的な状況・課題を3-4文で詳しく）",
+  "salesRole": "営業担当者の役割と会社（例：クラウドサービスを提供するITベンダー・テクノバンス社の法人営業担当）",
+  "meetingGoal": "この商談の目的（例：初回ヒアリング。顧客の課題を深掘りし、次回の提案に繋げる）",
   "customerName": "お客様の名前と役職（例：山田課長、佐々木取締役）",
   "customerRole": "役職と会社概要（例：従業員300名の精密機器メーカー・東洋精密工業の製造部課長）",
   "customerPersonality": "顧客の性格・心理状態（例：慎重で数字を重視、過去にIT導入で失敗した経験があり懐疑的）",
   "hiddenConcerns": "顧客の隠れた本音・懸念（営業には最初は言わない情報）",
-  "firstMessage": "お客様としての最初の発言（具体的な課題や状況に触れる自然な会話。2-3文）",
   "targetTurns": 5
 }`;
 
@@ -854,22 +856,26 @@ JSON形式で回答してください:
         const parsed = JSON.parse(rawContent);
         result = {
           scenario: parsed.scenario || parsed.シナリオ || `${card.titleJa}を実践する商談場面です。お客様が課題について相談しています。`,
+          salesRole: parsed.salesRole || "ITソリューションベンダーの法人営業担当",
+          meetingGoal: parsed.meetingGoal || "初回ヒアリング。顧客の課題を把握し、次回の提案に繋げる。",
           customerName: parsed.customerName || parsed.顧客名 || "田中部長",
           customerRole: parsed.customerRole || parsed.顧客役職 || "中堅企業の情報システム部長",
           customerPersonality: parsed.customerPersonality || "慎重で実績を重視するタイプ",
           hiddenConcerns: parsed.hiddenConcerns || "予算が限られている",
-          firstMessage: parsed.firstMessage || parsed.first_message || parsed.最初の発言 || "先日ご紹介いただいた件ですが、もう少し詳しくお話を聞かせていただけますか？",
           targetTurns: Math.min(Math.max(parseInt(parsed.targetTurns) || 5, 3), 6),
+          skillName: card.titleJa,
         };
       } catch {
         result = {
-          scenario: `従業員250名の食品加工メーカー・丸善食品株式会社。製造ラインの品質管理に課題を抱えており、不良品率が業界平均の1.5倍。前任のシステム担当が退職し、現在は現場リーダーが兼任で対応中。「${card.titleJa}」のスキルを意識して会話してください。`,
+          scenario: `従業員250名の食品加工メーカー・丸善食品株式会社。製造ラインの品質管理に課題を抱えており、不良品率が業界平均の1.5倍。前任のシステム担当が退職し、現在は現場リーダーが兼任で対応中。`,
+          salesRole: "製造業向けIoTソリューションを提供するテクノバンス社の法人営業担当",
+          meetingGoal: "初回ヒアリング。製造ラインの課題を具体的に把握し、IoTモニタリングの提案に繋げる。",
           customerName: "鈴木製造部長",
           customerRole: "従業員250名の食品加工メーカー・丸善食品の製造部長",
           customerPersonality: "現場叩き上げで理論より実践を重視、ITに苦手意識がある",
           hiddenConcerns: "実は来期の予算が既に他のプロジェクトで使われそうで、稟議が通るか不安",
-          firstMessage: "うちの製造ラインの不良品率が最近上がってきていまして、正直困っているんです。ただ、前にもシステムを入れようとして現場から猛反発を食らった経験がありまして...今回はどう違うのか、率直に聞かせてもらえますか？",
           targetTurns: 5,
+          skillName: card.titleJa,
         };
       }
 
@@ -896,13 +902,10 @@ JSON形式で回答してください:
       const safeTurns = Math.max(3, parseInt(targetTurns) || 5);
       const safeCurrent = parseInt(currentTurn) || 1;
       const isLastTurn = safeCurrent >= safeTurns;
-      const conversationHistory = messages.map((m: { role: string; content: string }) =>
-        `${m.role === 'customer' ? customerName : '営業（あなた）'}: ${m.content}`
-      ).join('\n');
 
       const turnPhase = safeCurrent <= 1 ? "序盤" : safeCurrent <= Math.ceil(safeTurns * 0.6) ? "中盤" : "終盤";
 
-      const systemPrompt = `あなたは${customerRole}の「${customerName}」です。以下のシナリオでBtoB商談のお客様役をリアルに演じてください。
+      const systemPrompt = `あなたは${customerRole}の「${customerName}」です。以下のシナリオでBtoB商談のお客様役をリアルに演じてください。営業担当者からのメッセージに対して、お客様として応答してください。
 
 シナリオ: ${scenario}
 あなたの性格・心理状態: ${customerPersonality || "慎重で実績を重視するタイプ"}
@@ -913,7 +916,7 @@ JSON形式で回答してください:
 演技ルール:
 - 実在するBtoB商談の顧客のように、具体的な数字・社名・状況を交えて話してください
 - 営業の質問には具体的な情報（「月間○件の不良が出ている」「予算は年間○万円程度」「前回は○○社のツールを試した」等）で答えてください
-- 同じフレーズの繰り返し（「なるほど」「考えさせてください」等）は絶対に避けてください。毎回異なる反応をしてください
+- 直前の自分の発言と同じ内容・同じフレーズは絶対に繰り返さないでください。必ず新しい情報や視点を加えてください
 - 営業の発言の質に応じて態度を変えてください:
   - 良い質問や共感には「そうなんですよ、実は...」と深い情報を開示
   - 的外れな提案には「いや、そういうことではなくて...」と軌道修正
@@ -922,16 +925,25 @@ JSON形式で回答してください:
 - 2-4文で応答してください。短すぎる1文だけの返答は避けてください。
 ${isLastTurn ? '- これが最後のやり取りです。会話の総括として、現時点での率直な感想と次のアクション（検討する／上司に相談する／資料を送ってほしい等）を伝えてください。' : ''}
 
-必ずJSON形式で回答してください:
+応答は必ず以下のJSON形式で返してください:
 {"message": "お客様としての応答（2-4文。具体的な内容を含む）", "isEnd": ${isLastTurn}}`;
+
+      const chatHistory: { role: "system" | "user" | "assistant"; content: string }[] = [
+        { role: "system", content: systemPrompt },
+      ];
+      for (const m of messages) {
+        if (m.role === 'user') {
+          chatHistory.push({ role: "user", content: m.content });
+        } else if (m.role === 'customer') {
+          chatHistory.push({ role: "assistant", content: JSON.stringify({ message: m.content, isEnd: false }) });
+        }
+      }
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `これまでの会話:\n${conversationHistory}\n\n上記の会話に続けて、お客様として応答してください。` },
-        ],
+        messages: chatHistory,
         max_completion_tokens: 512,
+        temperature: 0.9,
         response_format: { type: "json_object" },
       });
 
