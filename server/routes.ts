@@ -870,7 +870,18 @@ JSON形式で回答してください:
       const qNum = parseInt(questionNumber) || 1;
       const prevSits = Array.isArray(previousSituations) ? previousSituations.join('、') : '';
 
-      const prompt = `あなたは営業トレーニングの出題者です。「${card.titleJa}」のスキルを問う選択式問題を1問作ってください。スキル説明: ${card.descriptionJa}。ヒント: ${(card.tipsJa || []).slice(0, 2).join('、')}。シナリオ: ${scenario}。顧客: ${customerName}（${customerRole}）、性格: ${customerPersonality}。${prevSits ? `既出の状況（重複しないでください）: ${prevSits}。` : ''}問題${qNum}/5。商談中の具体的な場面で、顧客が発言した後に営業としてどう応答すべきかを問う問題を作ってください。以下のJSON形式で回答してください。{"situation":"商談中の具体的な場面説明（1文）","customerStatement":"顧客の発言（1-2文、自然な口語）","choices":[{"text":"選択肢A（営業の応答）","isCorrect":false,"explanation":"なぜこの応答が良い/悪いか"},{"text":"選択肢B","isCorrect":true,"explanation":"理由"},{"text":"選択肢C","isCorrect":false,"explanation":"理由"},{"text":"選択肢D","isCorrect":false,"explanation":"理由"}]}。正解は1つだけにしてください。不正解の選択肢は、よくある間違い（一方的な売り込み、顧客の言葉を無視、唐突な提案など）にしてください。`;
+      const prompt = `あなたは営業トレーニングの出題者です。「${card.titleJa}」のスキルを問う選択式問題を1問作ってください。スキル説明: ${card.descriptionJa}。ヒント: ${(card.tipsJa || []).slice(0, 2).join('、')}。シナリオ: ${scenario}。顧客: ${customerName}（${customerRole}）、性格: ${customerPersonality}。${prevSits ? `既出の状況（重複しないでください）: ${prevSits}。` : ''}問題${qNum}/5。商談中の具体的な場面で、顧客が発言した後に営業としてどう対応すべきかを問う問題を作ってください。
+
+【重要】選択肢のtextは「営業の対応方針」を体言止め・である調で簡潔に書いてください。台詞（「〜ですよね」「〜しませんか？」）は絶対に書かないでください。です/ます調も使わないでください。
+良い例: 「顧客の懸念を受け止め、同業種での導入実績とROIデータを提示したうえで、小規模パイロットの実施を提案する」
+良い例: 「まず現場の具体的な課題をヒアリングし、優先度を整理してから解決策を提示する」
+良い例: 「価格交渉には応じず、自社製品の全機能を一方的に説明する」
+悪い例（台詞と説明が混在）: 「まずは顧客の懸念を受け止め、共感を示します。そのうえで、導入事例を紹介し…」
+悪い例（台詞になっている）: 「それは大変ですね。具体的にどのような場面でお困りですか？」
+
+explanationも「〜だから」「〜ため」のである調で統一してください。
+
+以下のJSON形式で回答してください。{"situation":"商談中の具体的な場面説明（1文）","customerStatement":"顧客の発言（1-2文、自然な口語）","choices":[{"text":"対応方針A（体言止め・である調、1-2文）","isCorrect":false,"explanation":"なぜこの対応が適切/不適切か（である調）"},{"text":"対応方針B","isCorrect":true,"explanation":"理由"},{"text":"対応方針C","isCorrect":false,"explanation":"理由"},{"text":"対応方針D","isCorrect":false,"explanation":"理由"}]}。正解は1つだけにしてください。不正解の選択肢は、よくある間違い（一方的な売り込み、顧客の言葉を無視、唐突な提案など）にしてください。`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
@@ -905,7 +916,7 @@ JSON形式で回答してください:
 
         if (choices.length > 4) choices = choices.slice(0, 4);
         while (choices.length < 4) {
-          choices.push({ text: "もう少し状況を教えていただけますか？", isCorrect: false, explanation: "汎用的な質問で、この場面では具体性に欠けます。" });
+          choices.push({ text: "特に対応を変えず、用意した提案資料の説明を続ける", isCorrect: false, explanation: "顧客の発言を無視して一方的に進めるため、信頼関係を損なう可能性がある。" });
         }
 
         question = {
@@ -920,10 +931,10 @@ JSON形式で回答してください:
           situation: "商談の序盤、顧客が現状の課題について話し始めた場面",
           customerStatement: "正直なところ、今のやり方でもなんとかなっているんですよね。",
           choices: [
-            { text: "なるほど、現在のやり方で上手くいっている部分を教えていただけますか？", isCorrect: true, explanation: "顧客を否定せず、現状を理解しようとする姿勢が信頼を築きます。" },
-            { text: "いえ、このままでは必ず問題が起きますよ。", isCorrect: false, explanation: "顧客の判断を否定すると防御的になり、対話が止まります。" },
-            { text: "分かりました。では他の方にもお話を伺えますか？", isCorrect: false, explanation: "顧客を軽視している印象を与え、関係が悪化します。" },
-            { text: "弊社の導入事例を見ていただければ分かります。", isCorrect: false, explanation: "顧客の状況を聞く前に事例を押し付けるのは逆効果です。" },
+            { text: "現在のやり方で上手くいっている部分を具体的にヒアリングし、顧客の現状認識を深掘りする", isCorrect: true, explanation: "顧客を否定せず現状を理解しようとする姿勢が信頼構築につながるため。" },
+            { text: "現状維持のリスクを強調し、早急な対応の必要性を訴える", isCorrect: false, explanation: "顧客の判断を否定する形になり、防御的な反応を引き出してしまうため。" },
+            { text: "この顧客は見込みが薄いと判断し、他の担当者へのアプローチに切り替える", isCorrect: false, explanation: "顧客を軽視している印象を与え、関係悪化につながるため。" },
+            { text: "顧客の発言を遮り、自社の導入事例と実績データを一方的に提示する", isCorrect: false, explanation: "顧客の状況を理解する前に事例を押し付けるのは逆効果であるため。" },
           ],
           questionNumber: qNum,
           correctIndex: 0,
