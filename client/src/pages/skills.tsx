@@ -85,7 +85,7 @@ function SkillCardDetail({
     goodPoints: string[];
     improvements: string[];
     overallFeedback: string;
-    modelConversation: string;
+    conversationImprovements: { yourStatement: string; betterVersion: string; reason: string }[];
   } | null>(null);
 
   const startPracticeMutation = useMutation({
@@ -166,7 +166,7 @@ function SkillCardDetail({
         goodPoints: Array.isArray(data?.goodPoints) && data.goodPoints.length > 0 ? data.goodPoints : ["会話に積極的に取り組みました。"],
         improvements: Array.isArray(data?.improvements) && data.improvements.length > 0 ? data.improvements : ["より具体的な提案を含めると効果的です。"],
         overallFeedback: data?.overallFeedback || "練習お疲れさまでした。",
-        modelConversation: data?.modelConversation || card.goodExampleJa || "",
+        conversationImprovements: Array.isArray(data?.conversationImprovements) ? data.conversationImprovements : [],
       });
       setPracticeState('done');
     },
@@ -553,13 +553,29 @@ function SkillCardDetail({
                     </ul>
                   </div>
 
-                  {evaluation.modelConversation && (
-                    <div className="bg-blue-500/5 border border-blue-500/20 rounded-md p-3" data-testid="section-model-answer">
-                      <div className="flex items-center gap-1.5 mb-2">
+                  {evaluation.conversationImprovements && evaluation.conversationImprovements.length > 0 && (
+                    <div className="bg-blue-500/5 border border-blue-500/20 rounded-md p-3" data-testid="section-conversation-improvements">
+                      <div className="flex items-center gap-1.5 mb-3">
                         <MessageSquareQuote className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
-                        <p className="text-xs font-semibold text-blue-700 dark:text-blue-400">模範会話例</p>
+                        <p className="text-xs font-semibold text-blue-700 dark:text-blue-400">会話の改善ポイント</p>
                       </div>
-                      <p className="text-sm text-muted-foreground leading-relaxed italic whitespace-pre-line">{evaluation.modelConversation}</p>
+                      <div className="space-y-3">
+                        {evaluation.conversationImprovements.map((item, i) => (
+                          <div key={i} className="space-y-1.5">
+                            <div className="bg-red-500/5 border-l-2 border-red-400 pl-2 py-1 rounded-r">
+                              <p className="text-[10px] font-semibold text-red-600 dark:text-red-400 mb-0.5">あなたの発言</p>
+                              <p className="text-xs text-muted-foreground">「{item.yourStatement}」</p>
+                            </div>
+                            <div className="bg-green-500/5 border-l-2 border-green-500 pl-2 py-1 rounded-r">
+                              <p className="text-[10px] font-semibold text-green-600 dark:text-green-400 mb-0.5">改善例</p>
+                              <p className="text-xs text-foreground">「{item.betterVersion}」</p>
+                            </div>
+                            {item.reason && (
+                              <p className="text-[11px] text-muted-foreground pl-2">{item.reason}</p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </div>
