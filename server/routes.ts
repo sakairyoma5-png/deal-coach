@@ -276,11 +276,17 @@ ${customDifficultyInstructions[customDifficulty] || customDifficultyInstructions
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
-      const apiMsgs = msgs.map((m: any) => m.role === "system" ? { role: "user", content: m.content } : m);
+      const systemMsg = msgs.find((m: any) => m.role === "system");
+      const conversationLines = msgs
+        .filter((m: any) => m.role !== "system")
+        .map((m: any) => m.role === "user" ? `営業: ${m.content}` : `顧客: ${m.content}`)
+        .join("\n");
+
+      const singlePrompt = `${systemMsg?.content || ""}\n\n---\n以下はこれまでの商談の会話です。顧客として次の応答を書いてください。2-4文程度で応答してください。\n\n${conversationLines}\n\n顧客:`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
-        messages: apiMsgs,
+        messages: [{ role: "user", content: singlePrompt }],
         max_completion_tokens: 512,
       });
 
@@ -642,11 +648,17 @@ ${studyContext}
       res.setHeader("Cache-Control", "no-cache");
       res.setHeader("Connection", "keep-alive");
 
-      const apiChatMsgs = chatMessages.map((m: any) => m.role === "system" ? { role: "user", content: m.content } : m);
+      const systemChatMsg = chatMessages.find((m: any) => m.role === "system");
+      const chatLines = chatMessages
+        .filter((m: any) => m.role !== "system")
+        .map((m: any) => m.role === "user" ? `ユーザー: ${m.content}` : `コーチ: ${m.content}`)
+        .join("\n");
+
+      const singleChatPrompt = `${systemChatMsg?.content || "あなたは営業スキルのコーチです。ユーザーのロールプレイを分析し、改善アドバイスを提供してください。"}\n\n---\n以下はこれまでの会話です。コーチとして次の応答を書いてください。\n\n${chatLines}\n\nコーチ:`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
-        messages: apiChatMsgs,
+        messages: [{ role: "user", content: singleChatPrompt }],
         max_completion_tokens: 1536,
       });
 
