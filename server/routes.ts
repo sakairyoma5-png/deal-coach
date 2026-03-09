@@ -814,20 +814,11 @@ JSON形式で回答してください:
         return res.status(404).json({ message: "Skill card not found" });
       }
 
-      const prompt = `「${card.titleJa}」（${card.category}）を練習するBtoB商談シナリオをJSON形式で作成してください。
-
-スキル説明: ${card.descriptionJa}
-
-JSON形式で出力（全フィールド必須）:
-{"scenario":"具体的な商談背景（業種・会社名・規模・課題を含む3文）","salesRole":"営業の役割と会社名","meetingGoal":"商談の目的","customerName":"顧客の名前と役職","customerRole":"顧客の会社と役職の詳細","customerPersonality":"顧客の性格","hiddenConcerns":"顧客の隠れた懸念"}`;
+      const prompt = `あなたは営業トレーニング用のシナリオ作成者です。「${card.titleJa}」（${card.category}）を練習するBtoB商談シナリオを作ってください。スキル説明: ${card.descriptionJa}。業種は製造業・IT・小売・医療・建設・物流・金融・教育・飲食からランダムに選んでください。以下のJSON形式で回答してください。{"scenario":"商談背景（業種・会社名・規模・課題を3文で）","salesRole":"営業の役割と会社名","meetingGoal":"商談の目的","customerName":"顧客の名前と役職","customerRole":"顧客の会社と役職詳細","customerPersonality":"顧客の性格","hiddenConcerns":"顧客の隠れた懸念","firstGreeting":"顧客からの最初の挨拶（1-2文。例：お忙しいところありがとうございます。今日はどのようなご提案をいただけるのでしょうか？）"}`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
-        messages: [
-          { role: "system", content: "営業トレーニング用シナリオ作成者。JSON形式で回答。業種は製造業・IT・小売・医療・建設・物流・金融・教育・飲食からランダムに選択。会社名は具体的に設定。" },
-          { role: "user", content: prompt },
-        ],
-        max_completion_tokens: 800,
+        messages: [{ role: "user", content: prompt }],
         response_format: { type: "json_object" },
       });
 
@@ -844,6 +835,7 @@ JSON形式で出力（全フィールド必須）:
           customerRole: parsed.customerRole || "中堅企業の情報システム部長",
           customerPersonality: parsed.customerPersonality || "慎重で実績を重視するタイプ",
           hiddenConcerns: parsed.hiddenConcerns || "予算が限られている",
+          firstGreeting: parsed.firstGreeting || "本日はお時間をいただきありがとうございます。早速ですが、どのようなご提案をいただけるのでしょうか？",
           targetTurns: 5,
           skillName: card.titleJa,
         };
@@ -856,6 +848,7 @@ JSON形式で出力（全フィールド必須）:
           customerRole: "従業員250名の食品加工メーカー・丸善食品の製造部長",
           customerPersonality: "現場叩き上げで理論より実践を重視、ITに苦手意識がある",
           hiddenConcerns: "実は来期の予算が既に他のプロジェクトで使われそうで、稟議が通るか不安",
+          firstGreeting: "本日はお忙しい中お時間をいただきありがとうございます。製造ラインの件でお話があるとのことでしたが、具体的にどのようなご提案でしょうか？",
           targetTurns: 5,
           skillName: card.titleJa,
         };
@@ -891,49 +884,34 @@ JSON形式で出力（全フィールド必須）:
         `${m.role === 'customer' ? customerName : '営業'}: ${m.content}`
       ).join('\n');
 
-      const systemPrompt = `あなたは${customerRole}の「${customerName}」です。BtoB商談のお客様役を演じてください。
+      const prompt = `あなたは${customerRole}の「${customerName}」です。BtoB商談のお客様役を演じてください。シナリオ: ${scenario}。性格: ${customerPersonality || "慎重派"}。隠れた懸念（自分からは言わない）: ${hiddenConcerns || "予算の問題"}。フェーズ: ${turnPhase}（${safeCurrent}/${safeTurns}ターン目）。${isLastTurn ? '最終ターンです。感想と次のアクションを伝えてください。' : ''}
 
-シナリオ: ${scenario}
-性格: ${customerPersonality || "慎重派"}
-隠れた懸念: ${hiddenConcerns || "予算の問題"}
-フェーズ: ${turnPhase}（${safeCurrent}/${safeTurns}ターン目）
-${isLastTurn ? '※最終ターン：感想と次のアクションを伝えてください。' : ''}
-
-ルール: 営業の質問に具体的に答える。毎回違う内容で応答する。2-4文で回答。`;
-
-      const userPrompt = `これまでの会話:
+これまでの会話:
 ${conversationText}
 
-上記の会話を踏まえて、${customerName}として次の応答をしてください。前の発言と違う内容にしてください。
-
-JSON形式で回答:
-{"message":"顧客としての応答（2-4文）","isEnd":${isLastTurn}}`;
+上記を踏まえて、${customerName}として次の応答を2-4文で書いてください。前の発言と違う内容にしてください。応答のみを書いてください（名前や「」は不要）。`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userPrompt },
-        ],
-        max_completion_tokens: 512,
-        response_format: { type: "json_object" },
+        messages: [{ role: "user", content: prompt }],
       });
 
-      const rawContent = response.choices[0]?.message?.content || '{}';
+      const rawContent = (response.choices[0]?.message?.content || '').trim();
       console.log("[practice/message] AI raw response:", rawContent.slice(0, 300));
-      let result;
-      try {
-        const parsed = JSON.parse(rawContent);
-        result = {
-          message: parsed.message || parsed.応答 || parsed.response || "なるほど、具体的にはどのような形で進めていただけるのでしょうか？",
-          isEnd: isLastTurn || parsed.isEnd === true,
-        };
-      } catch {
-        result = {
-          message: rawContent.length > 10 ? rawContent.slice(0, 200) : "なるほど、その点についてもう少し詳しくお聞きしたいのですが。",
-          isEnd: isLastTurn,
-        };
+      let customerMessage = rawContent;
+      if (!customerMessage || customerMessage === '{}' || customerMessage.length < 5) {
+        customerMessage = "なるほど、その点についてもう少し詳しくお聞きしたいのですが。具体的にどのような形で対応いただけるのでしょうか？";
       }
+      if (customerMessage.startsWith('{')) {
+        try {
+          const parsed = JSON.parse(customerMessage);
+          customerMessage = parsed.message || parsed.応答 || customerMessage;
+        } catch {}
+      }
+      const result = {
+        message: customerMessage,
+        isEnd: isLastTurn,
+      };
 
       res.json(result);
     } catch (error) {

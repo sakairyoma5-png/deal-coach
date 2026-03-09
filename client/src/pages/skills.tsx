@@ -102,8 +102,9 @@ function SkillCardDetail({
       setCustomerPersonality(data.customerPersonality || "");
       setHiddenConcerns(data.hiddenConcerns || "");
       setTargetTurns(data.targetTurns || 5);
-      setCurrentTurn(0);
-      setChatMessages([]);
+      setCurrentTurn(1);
+      const greeting = data.firstGreeting || "本日はお時間をいただきありがとうございます。どのようなご提案をいただけるのでしょうか？";
+      setChatMessages([{ role: 'customer', content: greeting }]);
       setPracticeState('chatting');
       setEvaluation(null);
       setUserInput("");
@@ -468,10 +469,10 @@ function SkillCardDetail({
                 )}
               </div>
 
-              {practiceState === 'chatting' && chatMessages.length === 0 && !sendMessageMutation.isPending && (
+              {practiceState === 'chatting' && chatMessages.length === 1 && chatMessages[0]?.role === 'customer' && !sendMessageMutation.isPending && (
                 <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 text-center">
-                  <p className="text-xs text-primary font-medium mb-1">商談を始めましょう</p>
-                  <p className="text-[10px] text-muted-foreground">上記のシナリオを読み、営業担当として最初の挨拶・アプローチを入力してください。</p>
+                  <p className="text-xs text-primary font-medium mb-1">お客様が挨拶しました</p>
+                  <p className="text-[10px] text-muted-foreground">営業担当としてお客様に応答してください。シナリオを踏まえた提案やヒアリングを行いましょう。</p>
                 </div>
               )}
 
