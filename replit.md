@@ -21,7 +21,7 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 4. AI roleplay with 2 modes: personality-type selection (6 types + 3 difficulty levels) and custom free-form with AI pre-questioning
 5. Post-roleplay feedback chat with AI coach (SSE streaming, follow-up questions)
 6. AI auto-generated skill cards from roleplay weaknesses (shared globally, deduped by titleJa, includes all enriched fields)
-7. Chat-based skill card practice: AI plays customer role in BtoB sales scenarios, multi-turn conversation with evaluation
+7. Quiz-style skill card practice: AI generates BtoB sales scenarios, 5 multiple-choice questions per session (customer statement → pick best sales response from 4 options)
 8. Skill diagnosis (4-axis: listening, questioning, empathy, closing)
 9. Pricing page (3 tiers: Free ¥0, Basic ¥3,000/月, Pro ¥4,500/月) - Stripe Checkout integration with monthly/annual billing
 10. Enterprise/法人 plan: ¥10,000/user/month per-seat billing via Stripe (organization-level subscription)
@@ -78,9 +78,9 @@ AI-powered sales skill training platform with roleplay practice, skill diagnosis
 - `POST /api/feedback/start` - Start feedback chat (analyzes session, auto-generates skill cards)
 - `POST /api/feedback/chat` - Follow-up feedback conversation (SSE streaming)
 - `POST /api/skill-cards/:id/complete` - Mark skill card as completed by user
-- `POST /api/skill-cards/:id/practice/start` - Start chat-based practice
-- `POST /api/skill-cards/:id/practice/message` - Send message in practice chat
-- `POST /api/skill-cards/:id/practice/evaluate` - Evaluate practice + auto-record practice log
+- `POST /api/skill-cards/:id/practice/start` - Start quiz practice (generates scenario)
+- `POST /api/skill-cards/:id/practice/quiz` - Generate a quiz question (customer statement + 4 choices)
+- `POST /api/skill-cards/:id/practice/evaluate` - Record quiz results + practice log
 - `GET /api/skill-progress` - User's skill card completion progress
 - `GET /api/recommendations` - AI-powered recommendations
 - `GET /api/diagnosis/latest` - Latest skill diagnosis

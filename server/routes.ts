@@ -814,7 +814,7 @@ JSON形式で回答してください:
         return res.status(404).json({ message: "Skill card not found" });
       }
 
-      const prompt = `あなたは営業トレーニング用のシナリオ作成者です。「${card.titleJa}」（${card.category}）を練習するBtoB商談シナリオを作ってください。スキル説明: ${card.descriptionJa}。業種は製造業・IT・小売・医療・建設・物流・金融・教育・飲食からランダムに選んでください。以下のJSON形式で回答してください。{"scenario":"商談背景（業種・会社名・規模・課題を3文で）","salesRole":"営業の役割と会社名","meetingGoal":"商談の目的","customerName":"顧客の名前と役職","customerRole":"顧客の会社と役職詳細","customerPersonality":"顧客の性格","hiddenConcerns":"顧客の隠れた懸念","firstGreeting":"顧客からの最初の挨拶（1-2文。例：お忙しいところありがとうございます。今日はどのようなご提案をいただけるのでしょうか？）"}`;
+      const prompt = `あなたは営業トレーニング用のシナリオ作成者です。「${card.titleJa}」（${card.category}）を練習するBtoB商談シナリオを作ってください。スキル説明: ${card.descriptionJa}。業種は製造業・IT・小売・医療・建設・物流・金融・教育・飲食からランダムに選んでください。以下のJSON形式で回答してください。{"scenario":"商談背景（業種・会社名・規模・課題を3文で）","salesRole":"営業の役割と会社名","meetingGoal":"商談の目的","customerName":"顧客の名前と役職","customerRole":"顧客の会社と役職詳細","customerPersonality":"顧客の性格","hiddenConcerns":"顧客の隠れた懸念"}`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
@@ -835,8 +835,6 @@ JSON形式で回答してください:
           customerRole: parsed.customerRole || "中堅企業の情報システム部長",
           customerPersonality: parsed.customerPersonality || "慎重で実績を重視するタイプ",
           hiddenConcerns: parsed.hiddenConcerns || "予算が限られている",
-          firstGreeting: parsed.firstGreeting || "本日はお時間をいただきありがとうございます。早速ですが、どのようなご提案をいただけるのでしょうか？",
-          targetTurns: 5,
           skillName: card.titleJa,
         };
       } catch {
@@ -848,118 +846,31 @@ JSON形式で回答してください:
           customerRole: "従業員250名の食品加工メーカー・丸善食品の製造部長",
           customerPersonality: "現場叩き上げで理論より実践を重視、ITに苦手意識がある",
           hiddenConcerns: "実は来期の予算が既に他のプロジェクトで使われそうで、稟議が通るか不安",
-          firstGreeting: "本日はお忙しい中お時間をいただきありがとうございます。製造ラインの件でお話があるとのことでしたが、具体的にどのようなご提案でしょうか？",
-          targetTurns: 5,
           skillName: card.titleJa,
         };
       }
 
       res.json(result);
     } catch (error) {
-      console.error("Error starting practice chat:", error);
+      console.error("Error starting practice:", error);
       res.status(500).json({ message: "練習の開始に失敗しました" });
     }
   });
 
-  app.post("/api/skill-cards/:id/practice/message", isAuthenticated, async (req: any, res) => {
+  app.post("/api/skill-cards/:id/practice/quiz", isAuthenticated, async (req: any, res) => {
     try {
       const cardId = parseInt(req.params.id);
-      const { messages, scenario, customerName, customerRole, customerPersonality, hiddenConcerns, currentTurn, targetTurns } = req.body;
-      if (!messages || !Array.isArray(messages)) {
-        return res.status(400).json({ message: "会話履歴が必要です" });
-      }
+      const { scenario, customerName, customerRole, customerPersonality, hiddenConcerns, questionNumber, previousSituations } = req.body;
 
       const card = await storage.getSkillCard(cardId);
       if (!card) {
         return res.status(404).json({ message: "Skill card not found" });
       }
 
-      const safeTurns = Math.max(3, parseInt(targetTurns) || 5);
-      const safeCurrent = parseInt(currentTurn) || 1;
-      const isLastTurn = safeCurrent >= safeTurns;
+      const qNum = parseInt(questionNumber) || 1;
+      const prevSits = Array.isArray(previousSituations) ? previousSituations.join('、') : '';
 
-      const turnPhase = safeCurrent <= 1 ? "序盤" : safeCurrent <= Math.ceil(safeTurns * 0.6) ? "中盤" : "終盤";
-
-      const conversationText = messages.map((m: { role: string; content: string }) =>
-        `${m.role === 'customer' ? customerName : '営業'}: ${m.content}`
-      ).join('\n');
-
-      const prompt = `あなたは${customerRole}の「${customerName}」です。BtoB商談のお客様役を演じてください。シナリオ: ${scenario}。性格: ${customerPersonality || "慎重派"}。隠れた懸念（自分からは言わない）: ${hiddenConcerns || "予算の問題"}。フェーズ: ${turnPhase}（${safeCurrent}/${safeTurns}ターン目）。${isLastTurn ? '最終ターンです。率直な感想と次のアクションを伝えてください。' : ''}
-
-重要な演技ルール:
-- あなたは「お客様」です。自分から解決策やツール名を提案しないでください
-- 営業の質問に対して自社の現状や課題を話してください
-- 簡単に納得せず、「本当にうちに合うのか？」「前も似たツールで失敗した」「上司を説得できるか不安」など懸念を示してください
-- 専門的・技術的な長文は避け、普通のビジネスパーソンらしく1-3文で短く自然に話してください
-- ROIや導入計画の詳細を自分から求めないでください。営業から聞かれたら答える程度にしてください
-
-これまでの会話:
-${conversationText}
-
-${customerName}として次の応答を1-3文で短く書いてください。応答のみ（名前や「」は不要）。`;
-
-      const response = await openai.chat.completions.create({
-        model: "gpt-5-nano",
-        messages: [{ role: "user", content: prompt }],
-      });
-
-      const rawContent = (response.choices[0]?.message?.content || '').trim();
-      console.log("[practice/message] AI raw response:", rawContent.slice(0, 300));
-      let customerMessage = rawContent;
-      if (!customerMessage || customerMessage === '{}' || customerMessage.length < 5) {
-        customerMessage = "なるほど、その点についてもう少し詳しくお聞きしたいのですが。具体的にどのような形で対応いただけるのでしょうか？";
-      }
-      if (customerMessage.startsWith('{')) {
-        try {
-          const parsed = JSON.parse(customerMessage);
-          customerMessage = parsed.message || parsed.応答 || customerMessage;
-        } catch {}
-      }
-      const result = {
-        message: customerMessage,
-        isEnd: isLastTurn,
-      };
-
-      res.json(result);
-    } catch (error) {
-      console.error("Error in practice chat message:", error);
-      res.status(500).json({ message: "応答の生成に失敗しました" });
-    }
-  });
-
-  app.post("/api/skill-cards/:id/practice/evaluate", isAuthenticated, async (req: any, res) => {
-    try {
-      const cardId = parseInt(req.params.id);
-      const { messages, scenario, customerName } = req.body;
-      if (!messages || !Array.isArray(messages) || messages.length < 2) {
-        return res.status(400).json({ message: "評価するには会話履歴が必要です" });
-      }
-
-      const card = await storage.getSkillCard(cardId);
-      if (!card) {
-        return res.status(404).json({ message: "Skill card not found" });
-      }
-
-      const userStatements = messages
-        .filter((m: { role: string }) => m.role === 'user')
-        .map((m: { content: string }, i: number) => `営業発言${i + 1}: 「${m.content}」`)
-        .join('\n');
-
-      const conversationText = messages.map((m: { role: string; content: string }) =>
-        `${m.role === 'customer' ? customerName || 'お客様' : '【営業】'}: ${m.content}`
-      ).join('\n');
-
-      const prompt = `あなたは営業マネージャーです。部下の営業トレーニングを評価してください。対象スキル: ${card.titleJa}（${card.descriptionJa}）。要点: ${(card.tipsJa || []).join('、')}。シナリオ: ${scenario}。
-
-会話全体:
-${conversationText}
-
-営業の発言一覧（評価対象はこれらのみ）:
-${userStatements}
-
-重要ルール: goodPoints・improvements・conversationImprovementsは全て「営業の発言」のみを対象にしてください。顧客の発言は評価しないでください。
-
-以下のJSON形式で回答してください。{"score":3,"goodPoints":["営業の発言を引用した良い点"],"improvements":["営業の発言を引用した改善点"],"overallFeedback":"営業の対応についての総合評価","conversationImprovements":[{"yourStatement":"営業の発言をそのまま引用","betterVersion":"より効果的な言い方","reason":"理由"}]}。scoreは1-5。conversationImprovementsは営業の発言から2-3個選んでください。`;
+      const prompt = `あなたは営業トレーニングの出題者です。「${card.titleJa}」のスキルを問う選択式問題を1問作ってください。スキル説明: ${card.descriptionJa}。ヒント: ${(card.tipsJa || []).slice(0, 2).join('、')}。シナリオ: ${scenario}。顧客: ${customerName}（${customerRole}）、性格: ${customerPersonality}。${prevSits ? `既出の状況（重複しないでください）: ${prevSits}。` : ''}問題${qNum}/5。商談中の具体的な場面で、顧客が発言した後に営業としてどう応答すべきかを問う問題を作ってください。以下のJSON形式で回答してください。{"situation":"商談中の具体的な場面説明（1文）","customerStatement":"顧客の発言（1-2文、自然な口語）","choices":[{"text":"選択肢A（営業の応答）","isCorrect":false,"explanation":"なぜこの応答が良い/悪いか"},{"text":"選択肢B","isCorrect":true,"explanation":"理由"},{"text":"選択肢C","isCorrect":false,"explanation":"理由"},{"text":"選択肢D","isCorrect":false,"explanation":"理由"}]}。正解は1つだけにしてください。不正解の選択肢は、よくある間違い（一方的な売り込み、顧客の言葉を無視、唐突な提案など）にしてください。`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
@@ -967,64 +878,105 @@ ${userStatements}
         response_format: { type: "json_object" },
       });
 
-      const rawEval = response.choices[0]?.message?.content || '{}';
-      console.log("[practice/evaluate] AI raw response:", rawEval.slice(0, 500));
-      let evaluation;
-      try {
-        const parsed = JSON.parse(rawEval);
-        const score = parseInt(parsed.score || parsed.スコア || parsed.rating || "3");
-        const goodPoints = Array.isArray(parsed.goodPoints) ? parsed.goodPoints
-          : Array.isArray(parsed.good_points) ? parsed.good_points
-          : Array.isArray(parsed.良かった点) ? parsed.良かった点
-          : [];
-        const improvements = Array.isArray(parsed.improvements) ? parsed.improvements
-          : Array.isArray(parsed.改善点) ? parsed.改善点
-          : [];
+      const rawContent = response.choices[0]?.message?.content || '{}';
+      console.log(`[practice/quiz] Q${qNum} AI raw response:`, rawContent.slice(0, 500));
 
-        let convImprovements: { yourStatement: string; betterVersion: string; reason: string }[] = [];
-        const rawConvImps = parsed.conversationImprovements || parsed.conversation_improvements || [];
-        if (Array.isArray(rawConvImps)) {
-          convImprovements = rawConvImps
-            .filter((item: any) => item && (item.yourStatement || item.your_statement))
-            .map((item: any) => ({
-              yourStatement: item.yourStatement || item.your_statement || "",
-              betterVersion: item.betterVersion || item.better_version || "",
-              reason: item.reason || "",
-            }));
+      let question;
+      try {
+        const parsed = JSON.parse(rawContent);
+        let choices: { text: string; isCorrect: boolean; explanation: string }[] = Array.isArray(parsed.choices) ? parsed.choices.map((c: any) => ({
+          text: c.text || "",
+          isCorrect: c.isCorrect === true,
+          explanation: c.explanation || "",
+        })) : [];
+
+        const correctCount = choices.filter(c => c.isCorrect).length;
+        if (correctCount > 1) {
+          let foundFirst = false;
+          choices = choices.map(c => {
+            if (c.isCorrect && !foundFirst) { foundFirst = true; return c; }
+            if (c.isCorrect) return { ...c, isCorrect: false };
+            return c;
+          });
+        }
+        if (correctCount === 0 && choices.length > 0) {
+          choices[0].isCorrect = true;
         }
 
-        evaluation = {
-          score: isNaN(score) ? 3 : Math.max(1, Math.min(5, score)),
-          goodPoints: goodPoints.length > 0 ? goodPoints : ["会話に積極的に取り組んだ点が評価できます。"],
-          improvements: improvements.length > 0 ? improvements : ["より具体的な提案を含めるとさらに効果的です。"],
-          overallFeedback: (parsed.overallFeedback || parsed.overall_feedback || parsed.総合評価 || parsed.feedback || "").trim() || "練習お疲れさまでした。繰り返し練習することでスキルが向上します。",
-          conversationImprovements: convImprovements,
+        if (choices.length > 4) choices = choices.slice(0, 4);
+        while (choices.length < 4) {
+          choices.push({ text: "もう少し状況を教えていただけますか？", isCorrect: false, explanation: "汎用的な質問で、この場面では具体性に欠けます。" });
+        }
+
+        question = {
+          situation: parsed.situation || "商談の序盤、顧客が課題について話し始めた場面",
+          customerStatement: parsed.customerStatement || "正直なところ、今のやり方でもなんとかなっているんですよね。",
+          choices,
+          questionNumber: qNum,
+          correctIndex: choices.findIndex(c => c.isCorrect),
         };
       } catch {
-        evaluation = {
-          score: 3,
-          goodPoints: ["会話に積極的に取り組んだ点が評価できます。"],
-          improvements: ["より具体的な発言例を含めると、実践で使えるスキルが身につきます。"],
-          overallFeedback: "評価の生成に一部失敗しましたが、練習を続けることが大切です。",
-          conversationImprovements: [],
+        question = {
+          situation: "商談の序盤、顧客が現状の課題について話し始めた場面",
+          customerStatement: "正直なところ、今のやり方でもなんとかなっているんですよね。",
+          choices: [
+            { text: "なるほど、現在のやり方で上手くいっている部分を教えていただけますか？", isCorrect: true, explanation: "顧客を否定せず、現状を理解しようとする姿勢が信頼を築きます。" },
+            { text: "いえ、このままでは必ず問題が起きますよ。", isCorrect: false, explanation: "顧客の判断を否定すると防御的になり、対話が止まります。" },
+            { text: "分かりました。では他の方にもお話を伺えますか？", isCorrect: false, explanation: "顧客を軽視している印象を与え、関係が悪化します。" },
+            { text: "弊社の導入事例を見ていただければ分かります。", isCorrect: false, explanation: "顧客の状況を聞く前に事例を押し付けるのは逆効果です。" },
+          ],
+          questionNumber: qNum,
+          correctIndex: 0,
         };
       }
 
+      res.json(question);
+    } catch (error) {
+      console.error("Error generating quiz question:", error);
+      res.status(500).json({ message: "問題の生成に失敗しました" });
+    }
+  });
+
+  app.post("/api/skill-cards/:id/practice/evaluate", isAuthenticated, async (req: any, res) => {
+    try {
+      const cardId = parseInt(req.params.id);
+      const { answers, scenario } = req.body;
+      if (!answers || !Array.isArray(answers)) {
+        return res.status(400).json({ message: "回答データが必要です" });
+      }
+
+      const card = await storage.getSkillCard(cardId);
+      if (!card) {
+        return res.status(404).json({ message: "Skill card not found" });
+      }
+
+      if (answers.length < 1 || answers.length > 5) {
+        return res.status(400).json({ message: "回答は1〜5問です" });
+      }
+      const correctCount = answers.filter((a: { selectedIndex: number; correctIndex: number }) =>
+        typeof a.selectedIndex === 'number' && typeof a.correctIndex === 'number' && a.selectedIndex === a.correctIndex
+      ).length;
+      const totalQuestions = answers.length;
+      const scorePercent = Math.round((correctCount / totalQuestions) * 100);
+
       const practiceUserId = req.user.claims.sub;
       const practiceOrgId = await storage.getUserOrgId(practiceUserId);
-      const scoreAsPercent = Math.round((evaluation.score / 5) * 100);
       await storage.createPracticeLog({
         orgId: practiceOrgId,
         userId: practiceUserId,
         skillCardId: cardId,
-        score: scoreAsPercent,
+        score: scorePercent,
         practiceType: "skill_card",
       });
 
-      res.json(evaluation);
+      res.json({
+        correctCount,
+        totalQuestions,
+        scorePercent,
+      });
     } catch (error) {
       console.error("Error evaluating practice:", error);
-      res.status(500).json({ message: "評価の生成に失敗しました" });
+      res.status(500).json({ message: "評価の記録に失敗しました" });
     }
   });
 
