@@ -190,7 +190,7 @@ ${customDifficultyInstructions[customDifficulty] || customDifficultyInstructions
         messages: [
           { role: "user", content: `${systemMessage}\n\n---\n\n商談を開始してください。顧客として最初の挨拶をしてください。` },
         ],
-        max_completion_tokens: 512,
+        max_completion_tokens: 8000,
       });
 
       const assistantGreeting = initialResponse.choices[0]?.message?.content || "こんにちは。本日はお時間をいただきありがとうございます。";
@@ -241,7 +241,7 @@ ${customDifficultyInstructions[customDifficulty] || customDifficultyInstructions
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
         messages: [{ role: "user", content: prompt }],
-        max_completion_tokens: 512,
+        max_completion_tokens: 8000,
         response_format: { type: "json_object" },
       });
 
@@ -284,20 +284,11 @@ ${customDifficultyInstructions[customDifficulty] || customDifficultyInstructions
 
       const singlePrompt = `${systemMsg?.content || ""}\n\n---\n以下はこれまでの商談の会話です。顧客として次の応答を書いてください。2-4文程度で応答してください。\n\n${conversationLines}\n\n顧客:`;
 
-      console.log(`[roleplay/message] prompt length=${singlePrompt.length} msgs count=${msgs.length}`);
-
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
         messages: [{ role: "user", content: singlePrompt }],
-        max_completion_tokens: 512,
+        max_completion_tokens: 8000,
       });
-
-      console.log(`[roleplay/message] raw response:`, JSON.stringify({
-        finish_reason: response.choices[0]?.finish_reason,
-        content: response.choices[0]?.message?.content,
-        role: response.choices[0]?.message?.role,
-        usage: response.usage,
-      }));
 
       const fullResponse = response.choices[0]?.message?.content || "";
       console.log(`[roleplay/message] sessionId=${sessionId} response length=${fullResponse.length} preview="${fullResponse.slice(0, 100)}"`);
@@ -377,7 +368,7 @@ ${recentStudyContext}
         messages: [
           { role: "user", content: analysisPrompt },
         ],
-        max_completion_tokens: 1536,
+        max_completion_tokens: 8000,
       });
 
       const rawText = analysis.choices[0]?.message?.content || "";
@@ -524,7 +515,7 @@ ${studyContext}
         messages: [
           { role: "user", content: `${systemPrompt}\n\n---\n\n今のロープレの結果を振り返ってください。特に良かった点と、具体的にどう改善できるかを教えてください。` },
         ],
-        max_completion_tokens: 1536,
+        max_completion_tokens: 8000,
       });
 
       const coachMessage = initialAnalysis.choices[0]?.message?.content || "フィードバックの生成に失敗しました。";
@@ -570,7 +561,7 @@ ${studyContext}
       const skillAnalysis = await openai.chat.completions.create({
         model: "gpt-5-nano",
         messages: [{ role: "user", content: skillCardAnalysisPrompt }],
-        max_completion_tokens: 2048,
+        max_completion_tokens: 8000,
       });
 
       let generatedCards: any[] = [];
@@ -668,7 +659,7 @@ ${studyContext}
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
         messages: [{ role: "user", content: singleChatPrompt }],
-        max_completion_tokens: 1536,
+        max_completion_tokens: 8000,
       });
 
       const fullResponse = response.choices[0]?.message?.content || "";
@@ -801,7 +792,7 @@ JSON形式で回答してください:
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
         messages: [{ role: "user", content: prompt }],
-        max_completion_tokens: 512,
+        max_completion_tokens: 8000,
         response_format: { type: "json_object" },
       });
 
