@@ -282,7 +282,22 @@ ${customDifficultyInstructions[customDifficulty] || customDifficultyInstructions
         .map((m: any) => m.role === "user" ? `営業: ${m.content}` : `顧客: ${m.content}`)
         .join("\n");
 
-      const singlePrompt = `${systemMsg?.content || ""}\n\n---\n以下はこれまでの商談の会話です。顧客として次の応答を書いてください。2-4文程度で応答してください。\n\n${conversationLines}\n\n顧客:`;
+      const singlePrompt = `${systemMsg?.content || ""}
+
+---
+以下はこれまでの商談の会話です。顧客として次の応答を書いてください。
+
+【応答ルール】
+1. 2〜4文程度で簡潔に応答してください。長くなりすぎないこと。
+2. 【重複禁止】会話履歴を確認し、自分（顧客）が既に聞いた質問で、かつ相手（営業）がすでに答えた質問は絶対に繰り返さないでください。
+3. 【フォローアップ】自分が前のターンで聞いた質問に対して、営業が明確に答えていない・話題を変えた場合は、「先ほどの〇〇についてはいかがでしょうか？」と自然にフォローしてください。
+4. 【一回限りのアクション】雑談・趣味の話題・個人的な質問は会話全体を通じて1回だけ許可します。既に行った場合は商談の本題に集中してください。
+5. 営業の発言に対して自然かつリアルに反応し、性格タイプの特徴を活かした返答をしてください。
+
+【会話履歴】
+${conversationLines}
+
+顧客:`;
 
       const response = await openai.chat.completions.create({
         model: "gpt-5-nano",
