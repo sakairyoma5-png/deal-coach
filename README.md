@@ -19,6 +19,9 @@ The app supports individual training and team-based management, allowing users t
 - Stripe subscription payments
 - Premium plan and billing flow
 - Progress tracking and training logs
+- OpenAI-powered feedback generation
+- Sales skill scoring
+- Organization dashboard
 
 ## Tech Stack
 
@@ -28,6 +31,26 @@ The app supports individual training and team-based management, allowing users t
 - Express
 - PostgreSQL
 - Drizzle ORM
+- OpenAI API
+- Stripe
+- Replit Auth
+
+## Architecture
+
+Frontend:
+- React
+- TypeScript
+- Vite
+
+Backend:
+- Express
+- TypeScript
+
+Database:
+- PostgreSQL
+- Drizzle ORM
+
+Integrations:
 - OpenAI API
 - Stripe
 - Replit Auth
